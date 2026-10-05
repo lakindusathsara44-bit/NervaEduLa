@@ -1,8 +1,6 @@
 name: Deploy NervaEdu to Cloud Run
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -26,8 +24,16 @@ jobs:
           WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
         run: |
-          test -n "$WIF_PROVIDER" || { echo "Missing repository variable GCP_WORKLOAD_IDENTITY_PROVIDER"; exit 1; }
-          test -n "$SERVICE_ACCOUNT" || { echo "Missing repository variable GCP_SERVICE_ACCOUNT"; exit 1; }
+          if [ -z "$WIF_PROVIDER" ]; then
+            echo "::error::Missing repository variable GCP_WORKLOAD_IDENTITY_PROVIDER."
+            echo "Add it under Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
+          if [ -z "$SERVICE_ACCOUNT" ]; then
+            echo "::error::Missing repository variable GCP_SERVICE_ACCOUNT."
+            echo "Add it under Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
 
       - name: Authenticate to Google Cloud with Workload Identity Federation
         uses: google-github-actions/auth@v3
@@ -55,4 +61,3 @@ jobs:
             NERVAEDU_ADMIN_NAME=NERVAEDU_ADMIN_NAME:latest
             IMAGEKIT_PUBLIC_KEY=IMAGEKIT_PUBLIC_KEY:latest
             IMAGEKIT_PRIVATE_KEY=IMAGEKIT_PRIVATE_KEY:latest
-
