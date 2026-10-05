@@ -1,0 +1,17 @@
+.git
+.github/
+.gitignore
+.gcloudignore
+.env*
+!.env.example
+data/
+private/
+config/
+logs/
+backups/
+node_modules/
+.npm-cache/
+.test-run/
+*.log
+*.bak
+*.backup

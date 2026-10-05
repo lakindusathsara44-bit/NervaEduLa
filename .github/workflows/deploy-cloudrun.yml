@@ -1,0 +1,58 @@
+name: Deploy NervaEdu to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nervaedu-cloud-run-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$WIF_PROVIDER" || { echo "Missing repository variable GCP_WORKLOAD_IDENTITY_PROVIDER"; exit 1; }
+          test -n "$SERVICE_ACCOUNT" || { echo "Missing repository variable GCP_SERVICE_ACCOUNT"; exit 1; }
+
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: nervaedu
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Build and deploy NervaEdu
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: nervaedu
+          source: .
+          project_id: nervaedu
+          region: asia-south1
+          flags: --allow-unauthenticated
+          env_vars: |-
+            NODE_ENV=production
+            NERVAEDU_DATABASE=firestore
+            FIREBASE_PROJECT_ID=nervaedu
+            IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/nsxnuxxghc
+          secrets: |-
+            NERVAEDU_ADMIN_PHONE=NERVAEDU_ADMIN_PHONE:latest
+            NERVAEDU_ADMIN_PASSWORD=NERVAEDU_ADMIN_PASSWORD:latest
+            NERVAEDU_ADMIN_NAME=NERVAEDU_ADMIN_NAME:latest
+            IMAGEKIT_PUBLIC_KEY=IMAGEKIT_PUBLIC_KEY:latest
+            IMAGEKIT_PRIVATE_KEY=IMAGEKIT_PRIVATE_KEY:latest
+

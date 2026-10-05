@@ -1,0 +1,18 @@
+# Local account records and uploaded student/teacher files
+/data/
+/private/
+/config/
+/logs/
+/backups/
+
+# Dependencies, environment secrets, and editor/OS files
+/node_modules/
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
+/.npm-cache/
+/.test-run/
+*.log
+*.bak
+*.backup
