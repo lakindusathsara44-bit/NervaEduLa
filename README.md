@@ -12,7 +12,7 @@ You can also open a terminal in this folder, run `node server.js` (or `npm start
 
 ## HTTP and file layout
 
-Only `public/` contains files for frontend delivery: `public/index.html` and the two named files in `public/assets/`. The subject catalog is serialized from the server module by the `/assets/catalog.js` route. The HTTP server serves only these explicit frontend paths; it does not serve the project root or expose directory indexes. Server code, dependencies, environment files, and the local database remain outside the public directory. Local data and uploads stay under `data/` and are accessed only through application code and authenticated upload routes.
+Only `public/` contains files for frontend delivery: `public/index.html` and the two named files in `public/assets/`. The subject catalog is serialized from the server module by the `/assets/catalog.js` route. The frontend also includes the loader and authentication-motion assets used by the welcome and sign-in experience. The HTTP server serves only these explicit frontend paths; it does not serve the project root or expose directory indexes. Server code, dependencies, environment files, and the local database remain outside the public directory. Local data and uploads stay under `data/` and are accessed only through application code and authenticated upload routes.
 
 Requests containing environment filenames, private/config/data directories, source/configuration filenames, logs, backups, or traversal segments receive a 404 response. Upload downloads accept only app-generated UUID filenames and verify the user session and resource permissions before opening a file.
 

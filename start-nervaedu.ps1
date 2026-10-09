@@ -13,7 +13,7 @@ try {
 if (-not $isRunning) {
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
     if (-not $node) {
-        throw 'Node.js is required. Install Node.js 18 or newer, then run this launcher again.'
+        throw 'Node.js is required. Install Node.js 22 or newer, then run this launcher again.'
     }
 
     Start-Process -FilePath $node.Source -ArgumentList 'server.js' -WorkingDirectory $appFolder -WindowStyle Hidden
