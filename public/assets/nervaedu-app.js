@@ -360,12 +360,16 @@ $('#registerForm').onsubmit = async event => {
     if (form.elements.thumbnail.files[0]) data.set('thumbnail', form.elements.thumbnail.files[0]);
   }
   const button = form.querySelector('button[type=submit]'); button.disabled = true; button.textContent = 'Creating account…';
+  window.NervaLoader?.show('Creating your account');
   try { const result = await api('/api/register', { method: 'POST', body: data }); form.reset(); setRegRole('student'); await showApp(result.user); }
   catch (error) { message('#authMessage', error.message); button.disabled = false; button.innerHTML = 'Create my account <span>→</span>'; }
+  finally { window.NervaLoader?.hide(); }
 };
 $('#loginForm').onsubmit = async event => { event.preventDefault(); const form = event.currentTarget, button = form.querySelector('button'); button.disabled = true; button.textContent = 'Signing in…';
+  window.NervaLoader?.show('Signing in to NervaEdu');
   try { const result = await api('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone: form.elements.phone.value.trim(), password: form.elements.password.value }) }); form.reset(); await showApp(result.user); }
   catch (error) { message('#authMessage', error.message); button.disabled = false; button.innerHTML = 'Sign in <span>→</span>'; }
+  finally { window.NervaLoader?.hide(); }
 };
 async function signOut() {
   try { await api('/api/logout', { method: 'POST' }); }
@@ -375,4 +379,4 @@ async function signOut() {
 $('#logoutButton').onclick = signOut;
 $('#topLogout').onclick = signOut;
 $('#profileButton').onclick = () => renderPage('profile'); $('#mobileProfile').onclick = () => renderPage('profile');
-api('/api/me').then(({ user }) => user && showApp(user)).catch(() => {});
+api('/api/me').then(({ user }) => user ? showApp(user) : null).catch(() => {}).finally(() => window.NervaLoader?.hide());
