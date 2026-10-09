@@ -48,6 +48,45 @@ function safe(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&
 function formatPhone(phone) { return safe(phone || 'Not provided'); }
 function formatLkr(value) { return `LKR ${new Intl.NumberFormat('en-LK', { maximumFractionDigits: 0 }).format(Number(value) || 0)}`; }
 function whatsappPhone(value) { let digits = String(value || '').replace(/\D/g, ''); return digits.startsWith('0') ? '94' + digits.slice(1) : digits; }
+
+function showWelcome() {
+  $('#authScreen').classList.add('hidden');
+  $('#appScreen').classList.add('hidden');
+  $('#nervaWelcome').classList.remove('hidden');
+}
+function continueFromWelcome(createAccount = false) {
+  $('#nervaWelcome').classList.add('hidden');
+  $('#authScreen').classList.remove('hidden');
+  chooseAuth(createAccount);
+  window.scrollTo?.(0, 0);
+}
+function setWelcomeTab(name) {
+  const guide = name === 'guide';
+  $('#guideTab').classList.toggle('is-active', guide);
+  $('#reviewTab').classList.toggle('is-active', !guide);
+  $('#guideTab').setAttribute('aria-selected', String(guide));
+  $('#reviewTab').setAttribute('aria-selected', String(!guide));
+  $('#guidePanel').classList.toggle('hidden', !guide);
+  $('#reviewPanel').classList.toggle('hidden', guide);
+}
+let welcomeRating = 0;
+function getLocalReviews() {
+  try { const data = JSON.parse(localStorage.getItem('nervaeduLocalReviews') || '[]'); return Array.isArray(data) ? data.slice(0, 3) : []; }
+  catch { return []; }
+}
+function renderLocalReviews() {
+  const target = $('#welcomeReviewList'); if (!target) return;
+  const reviews = getLocalReviews();
+  target.replaceChildren();
+  reviews.forEach(review => {
+    const card = document.createElement('article'); card.className = 'welcome-review-item';
+    const stars = document.createElement('b'); stars.className = 'welcome-review-item-stars'; stars.textContent = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+    const note = document.createElement('p'); note.textContent = review.text;
+    const date = document.createElement('small'); date.textContent = 'Saved on this device';
+    card.append(stars, note, date); target.append(card);
+  });
+}
+
 function chooseAuth(isRegister) {
   $('#loginForm').classList.toggle('hidden', isRegister); $('#registerForm').classList.toggle('hidden', !isRegister);
   $('#authSwitch').innerHTML = isRegister ? 'Already have an account? <button type="button" id="switchAuth">Sign in</button>' : 'New to NervaEdu? <button type="button" id="switchAuth">Create an account</button>';
@@ -345,6 +384,39 @@ function bindPageActions() {
     catch (error) { toast(error.message); }
   });
 }
+
+$('#welcomeContinue').onclick = () => continueFromWelcome(false);
+$('#welcomeCreate').onclick = () => continueFromWelcome(true);
+$('#reviewContinue').onclick = () => continueFromWelcome(false);
+$('#guideTab').onclick = () => setWelcomeTab('guide');
+$('#reviewTab').onclick = () => { setWelcomeTab('review'); renderLocalReviews(); };
+$('[data-rating]').forEach(button => button.onclick = () => {
+  welcomeRating = Number(button.dataset.rating);
+  $('[data-rating]').forEach(star => {
+    const selected = Number(star.dataset.rating) <= welcomeRating;
+    star.classList.toggle('is-selected', selected);
+    star.setAttribute('aria-pressed', String(Number(star.dataset.rating) === welcomeRating));
+  });
+  $('#welcomeReviewStatus').textContent = welcomeRating + ' out of 5 stars selected.';
+});
+$('#welcomeReviewForm').onsubmit = event => {
+  event.preventDefault();
+  const text = $('#welcomeReviewText').value.trim();
+  if (!welcomeRating) { $('#welcomeReviewStatus').textContent = 'Please choose a star rating first.'; return; }
+  if (text.length < 4) { $('#welcomeReviewStatus').textContent = 'Please write a little more (at least 4 characters).'; return; }
+  try {
+    const reviews = getLocalReviews();
+    reviews.unshift({ rating: welcomeRating, text: text.slice(0, 400), savedAt: new Date().toISOString() });
+    localStorage.setItem('nervaeduLocalReviews', JSON.stringify(reviews.slice(0, 3)));
+    $('#welcomeReviewText').value = ''; welcomeRating = 0;
+    $('[data-rating]').forEach(star => { star.classList.remove('is-selected'); star.setAttribute('aria-pressed', 'false'); });
+    $('#welcomeReviewStatus').textContent = 'Review saved on this device. It has not been sent to the NervaEdu team.';
+    renderLocalReviews();
+  } catch { $('#welcomeReviewStatus').textContent = 'This browser could not save your review. Please check browser storage settings.'; }
+};
+$('.welcome-socials a').forEach(link => link.onclick = event => event.preventDefault());
+renderLocalReviews();
+
 $('#switchAuth').onclick = () => chooseAuth(true); populateSubjects(); chooseAuth(false);
 $('.role-option').forEach(button => button.onclick = () => setRegRole(button.dataset.role));
 $('#registerForm').elements.qualification.addEventListener('change', () => setRegRole($('#registerForm').elements.role.value));
@@ -385,4 +457,4 @@ async function signOut() {
 $('#logoutButton').onclick = signOut;
 $('#topLogout').onclick = signOut;
 $('#profileButton').onclick = () => renderPage('profile'); $('#mobileProfile').onclick = () => renderPage('profile');
-api('/api/me').then(({ user }) => user ? showApp(user) : null).catch(() => {}).finally(() => window.NervaLoader?.hide());
+api('/api/me').then(({ user }) => user ? showApp(user) : showWelcome()).catch(() => showWelcome()).finally(() => window.NervaLoader?.hide());
