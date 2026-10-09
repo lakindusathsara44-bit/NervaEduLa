@@ -634,6 +634,9 @@ function staticFile(req, res, pathname) {
     ['/index.html', ['index.html', 'text/html; charset=utf-8']],
     ['/assets/nervaedu-app.js', ['assets/nervaedu-app.js', 'text/javascript; charset=utf-8']],
     ['/assets/nervaedu.css', ['assets/nervaedu.css', 'text/css; charset=utf-8']],
+    ['/nerva-loader.css', ['nerva-loader.css', 'text/css; charset=utf-8']],
+    ['/nerva-loader.js', ['nerva-loader.js', 'text/javascript; charset=utf-8']],
+    ['/nerva-loader-preview.html', ['nerva-loader-preview.html', 'text/html; charset=utf-8']],
   ]);
   const entry = publicFiles.get(decoded);
   if (!entry || !['GET', 'HEAD'].includes(req.method)) return json(res, 404, { error: 'File not found.' });
