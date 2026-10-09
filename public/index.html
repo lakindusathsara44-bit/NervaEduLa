@@ -13,6 +13,56 @@
 <body>
   <section id="fileWarning" class="file-warning" hidden><div><span class="brand-mark">✳</span><p class="eyebrow green-eyebrow">ONE QUICK START</p><h1>Open your learning space through the local server.</h1><p>Accounts, videos and quizzes need the NervaEdu server. Double-click <b>start-nervaedu.bat</b> in this folder to start it.</p><a class="button primary" href="http://localhost:4173">Open NervaEdu →</a></div></section>
   <script>if (location.protocol === 'file:') document.getElementById('fileWarning').hidden = false;</script>
+  <section id="nervaWelcome" class="nerva-welcome hidden" aria-labelledby="welcomeHeading">
+    <div class="welcome-topbar"><a class="brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a><span class="welcome-pill"><i></i> YOUR LEARNING SPACE</span></div>
+    <div class="welcome-layout">
+      <div class="welcome-story">
+        <p class="eyebrow green-eyebrow">LEARN · PRACTISE · GROW</p>
+        <h1 id="welcomeHeading">Your next step<br><span>starts here.</span></h1>
+        <p class="welcome-lead">NervaEdu brings lessons, study papers and quizzes into one calm learning space for Sri Lankan students and teachers.</p>
+        <div class="welcome-visual" aria-label="Animated illustration of lessons, papers and quizzes">
+          <div class="welcome-visual-grid"></div><div class="welcome-ring welcome-ring-one"></div><div class="welcome-ring welcome-ring-two"></div>
+          <div class="welcome-orb">✳<small>N</small></div>
+          <div class="welcome-float welcome-float-lessons"><span>▶</span><b>Video lessons</b><small>Learn at your pace</small></div>
+          <div class="welcome-float welcome-float-papers"><span>▤</span><b>Study papers</b><small>Practise with purpose</small></div>
+          <div class="welcome-float welcome-float-quiz"><span>✓</span><b>MCQ quizzes</b><small>Check your progress</small></div>
+        </div>
+        <div class="welcome-feature-row"><span>✦ Learn by subject</span><span>✦ Practise anytime</span><span>✦ Track progress</span></div>
+      </div>
+      <div class="welcome-side">
+        <div class="welcome-tabs" role="tablist" aria-label="NervaEdu information">
+          <button type="button" class="welcome-tab is-active" id="guideTab" role="tab" aria-selected="true" aria-controls="guidePanel">Quick guide</button>
+          <button type="button" class="welcome-tab" id="reviewTab" role="tab" aria-selected="false" aria-controls="reviewPanel">★ Review</button>
+        </div>
+        <div id="guidePanel" class="welcome-tab-panel" role="tabpanel" aria-labelledby="guideTab">
+          <p class="eyebrow green-eyebrow">GET STARTED IN 3 STEPS</p>
+          <h2>How NervaEdu works</h2>
+          <ol class="welcome-steps">
+            <li><span>01</span><div><b>Create your account</b><p>Choose Student or Teacher and complete the details.</p></div></li>
+            <li><span>02</span><div><b>Find your learning space</b><p>Explore subjects, lessons, study papers and quizzes available to you.</p></div></li>
+            <li><span>03</span><div><b>Learn a little every day</b><p>Practise, review what you know and keep moving forward.</p></div></li>
+          </ol>
+          <p class="welcome-note">Teachers may need account verification before publishing learning resources.</p>
+          <button type="button" id="welcomeContinue" class="button primary full">Continue to sign in <span>→</span></button>
+          <button type="button" id="welcomeCreate" class="welcome-create">New here? Create an account</button>
+        </div>
+        <div id="reviewPanel" class="welcome-tab-panel hidden" role="tabpanel" aria-labelledby="reviewTab">
+          <p class="eyebrow green-eyebrow">YOUR FEEDBACK MATTERS</p><h2>Review NervaEdu</h2>
+          <p class="welcome-review-help">Choose a rating and share a short note. For now, reviews are saved only on this device; they are not sent to the NervaEdu team.</p>
+          <form id="welcomeReviewForm" class="welcome-review-form">
+            <fieldset><legend>Your rating</legend><div class="welcome-stars" role="group" aria-label="Rate NervaEdu">
+              <button type="button" data-rating="1" aria-label="1 star">★</button><button type="button" data-rating="2" aria-label="2 stars">★</button><button type="button" data-rating="3" aria-label="3 stars">★</button><button type="button" data-rating="4" aria-label="4 stars">★</button><button type="button" data-rating="5" aria-label="5 stars">★</button>
+            </div></fieldset>
+            <label class="welcome-review-label">Your review<textarea id="welcomeReviewText" maxlength="400" rows="3" placeholder="What do you like, or what should we improve?"></textarea></label>
+            <button type="submit" class="button primary full">Save review on this device</button><p id="welcomeReviewStatus" class="welcome-review-status" role="status"></p>
+          </form>
+          <div id="welcomeReviewList" class="welcome-review-list" aria-live="polite"></div>
+          <button type="button" id="reviewContinue" class="welcome-create">Continue to sign in →</button>
+        </div>
+      </div>
+    </div>
+    <footer class="welcome-footer"><div><b>NervaEdu</b><span>Learning grows when we grow together.</span></div><div class="welcome-socials" aria-label="Social links coming soon"><span>Contact & social</span><a href="#" aria-disabled="true" title="WhatsApp contact coming soon">WhatsApp <small>soon</small></a><a href="#" aria-disabled="true" title="Facebook page coming soon">Facebook <small>soon</small></a><a href="#" aria-disabled="true" title="Instagram page coming soon">Instagram <small>soon</small></a><a href="#" aria-disabled="true" title="X profile coming soon">X <small>soon</small></a></div></footer>
+  </section>
   <div id="authScreen" class="auth-shell">
     <section class="auth-brand"><a class="brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a><div class="auth-art auth-motion-art" aria-hidden="true">
       <div class="auth-motion-grid"></div>
