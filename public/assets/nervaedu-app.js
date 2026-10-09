@@ -74,6 +74,11 @@ function setRegRole(role) {
   studentPhone.required = role === 'student'; teacherPhone.required = role === 'teacher';
   form.elements.age.required = role === 'student'; form.elements.address.required = role === 'student'; form.elements.school.required = role === 'student';
   form.elements.whatsapp.required = role === 'teacher'; form.elements.qualification.required = role === 'teacher';
+  const otherQualField = $('#otherQualField');
+  const otherQualInput = form.elements.otherQualification;
+  const showOtherQual = role === 'teacher' && form.elements.qualification.value === 'Other';
+  otherQualField.classList.toggle('hidden', !showOtherQual);
+  otherQualInput.required = showOtherQual;
   form.elements.thumbnail.required = false;
 }
 async function showApp(user) {
@@ -341,7 +346,8 @@ function bindPageActions() {
   });
 }
 $('#switchAuth').onclick = () => chooseAuth(true); populateSubjects(); chooseAuth(false);
-$$('.role-option').forEach(button => button.onclick = () => setRegRole(button.dataset.role));
+$('.role-option').forEach(button => button.onclick = () => setRegRole(button.dataset.role));
+$('#registerForm').elements.qualification.addEventListener('change', () => setRegRole($('#registerForm').elements.role.value));
 $('#registerForm').onsubmit = async event => {
   event.preventDefault(); const form = event.currentTarget, role = form.elements.role.value;
   const messageText = $('#authMessage'); messageText.textContent = ''; messageText.classList.remove('success');
