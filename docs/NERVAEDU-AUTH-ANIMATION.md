@@ -15,3 +15,17 @@ The prototype HTML contains its own CSS and JavaScript and has no library or ima
 
 ## Notes
 The prototype is a visual demo, not a production authentication endpoint. Use the main app at \`/\` for real sign in and sign up.
+
+
+# NervaEdu teacher registration fields
+
+Teacher sign-up now clearly supports:
+- Multi-select subject choices grouped by Scholarship, G.C.E. O/L and G.C.E. A/L in the production app (populated from the existing subject catalogue).
+- Custom subject entries for subjects not present in the catalogue.
+- A qualification selector with Bachelor's degree, Master's degree, PhD/Doctorate, B.Ed., PGDE, HND, teaching diploma, teaching certificate, professional qualification and Other.
+- A conditional additional-qualification field that becomes required only when "Other" is selected.
+- Teacher contact and WhatsApp number fields.
+
+The standalone auth prototype also demonstrates Scholarship, O/L and A/L subject selections and qualification details. It is visual-only and never sends/stores submitted details.
+
+Production registration continues to submit the existing subject and qualification fields to \`/api/register\`, which validates and saves the selected values.
