@@ -4,6 +4,8 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#176b55"><title>NervaEdu — School learning space</title>
   <link rel="stylesheet" href="/assets/nervaedu.css">
+  <link rel="stylesheet" href="/nerva-loader.css">
+  <script src="/nerva-loader.js" defer></script>
   <script src="/assets/catalog.js" defer></script>
   <script src="/assets/nervaedu-app.js" defer></script>
 </head>
@@ -34,6 +36,21 @@
   <div id="appScreen" class="app-shell hidden">
     <aside class="sidebar"><a class="brand side-brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a><div class="school-chip"><div class="school-emoji">🏫</div><div><b id="schoolName">School space</b><small id="schoolCaption">Learning together</small></div></div><p class="nav-caption">LEARNING SPACE</p><nav id="navigation" class="navigation"></nav><div class="sidebar-bottom"><div class="tip-card"><span>☀️</span><b>A little each day</b><p>Small steps make a big difference in learning.</p></div><button id="profileButton" class="profile-button"></button><button id="logoutButton" class="logout-button">↪ &nbsp; Sign out</button></div></aside>
     <main class="main-area"><header class="topbar"><div class="crumb-group"><button id="backButton" class="back-button" type="button" aria-label="Go back">← Back</button><span class="crumb-light">NervaEdu</span><span class="crumb-sep">/</span><b id="pageCrumb">Overview</b></div><div class="topbar-right"><span class="local-badge"><i></i> School learning space</span><button id="topLogout" class="top-logout" aria-label="Sign out">↪ <span>Sign out</span></button><button id="mobileProfile" class="mobile-avatar" aria-label="Profile"></button></div></header><nav id="mobileNavigation" class="mobile-navigation" aria-label="Main navigation"></nav><div id="page" class="page-content"></div></main>
+  </div>
+  <div id="nerva-loading" class="nerva-loader is-visible" role="status" aria-live="polite" aria-label="NervaEdu is loading" aria-hidden="false">
+    <div class="nerva-loader__content">
+      <div class="nerva-loader__visual" aria-hidden="true">
+        <span class="nerva-loader__halo"></span>
+        <span class="nerva-loader__orbit"><span class="nerva-loader__orbit-dot"></span></span>
+        <span class="nerva-loader__orbit nerva-loader__orbit--inner"><span class="nerva-loader__orbit-dot"></span></span>
+        <div class="nerva-loader__logo"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="nerva-mark-gradient" x1="8" y1="8" x2="40" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#65f0f4"/><stop offset=".52" stop-color="#91a7ff"/><stop offset="1" stop-color="#b18aff"/></linearGradient></defs><path d="M12 36V12L36 36V12" fill="none" stroke="url(#nerva-mark-gradient)" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="36" cy="12" r="3" fill="#70eaf2"/></svg></div>
+      </div>
+      <p class="nerva-loader__eyebrow">Your learning space</p>
+      <h2 class="nerva-loader__brand">Nerva<span class="nerva-loader__brand-accent">Edu</span></h2>
+      <p class="nerva-loader__message"><span data-nerva-message>Preparing your learning space</span><span class="nerva-loader__dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+      <div class="nerva-loader__track" aria-hidden="true"></div>
+    </div>
+    <div class="nerva-loader__footer">A smarter way to learn</div>
   </div>
   <div id="toast" class="toast" role="status"></div>
   <script>window.addEventListener('error', function (event) { if (event.filename && /nervaedu-app\.js|catalog\.js/.test(event.filename)) { var status = document.getElementById('authMessage'); if (status) status.textContent = 'NervaEdu could not start. Refresh this page and try again.'; } }); window.addEventListener('unhandledrejection', function () { var status = document.getElementById('authMessage'); if (status && !status.textContent) status.textContent = 'NervaEdu could not connect. Check that the local server is running, then refresh.'; });</script>
