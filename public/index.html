@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#176b55"><title>NervaEdu — School learning space</title>
+  <meta name="theme-color" content="#080c16"><title>NervaEdu — School learning space</title>
   <link rel="stylesheet" href="/assets/nervaedu.css">
+  <link rel="stylesheet" href="/assets/nervaedu-auth-motion.css">
   <link rel="stylesheet" href="/nerva-loader.css">
   <script src="/nerva-loader.js" defer></script>
   <script src="/assets/catalog.js" defer></script>
@@ -13,7 +14,14 @@
   <section id="fileWarning" class="file-warning" hidden><div><span class="brand-mark">✳</span><p class="eyebrow green-eyebrow">ONE QUICK START</p><h1>Open your learning space through the local server.</h1><p>Accounts, videos and quizzes need the NervaEdu server. Double-click <b>start-nervaedu.bat</b> in this folder to start it.</p><a class="button primary" href="http://localhost:4173">Open NervaEdu →</a></div></section>
   <script>if (location.protocol === 'file:') document.getElementById('fileWarning').hidden = false;</script>
   <div id="authScreen" class="auth-shell">
-    <section class="auth-brand"><a class="brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a><div class="auth-art"><div class="art-sun"></div><div class="art-hill hill-one"></div><div class="art-hill hill-two"></div><div class="art-book">📚</div></div><div class="auth-copy"><span class="eyebrow">YOUR SCHOOL. YOUR LEARNING.</span><h1>A brighter way<br>to learn together.</h1><p>Lessons, papers and practice from the teachers who know you.</p></div><div class="auth-footer">Made for Sri Lankan classrooms&nbsp; · &nbsp;ආයුබෝවන්</div></section>
+    <section class="auth-brand"><a class="brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a><div class="auth-art auth-motion-art" aria-hidden="true">
+      <div class="auth-motion-grid"></div>
+      <span class="auth-orbit auth-orbit--one"><i></i></span><span class="auth-orbit auth-orbit--two"><i></i></span><span class="auth-orbit auth-orbit--three"></span>
+      <div class="auth-visual-core"><svg viewBox="0 0 48 48" fill="none"><path d="M12 36V12L36 36V12" stroke="#70e7ef" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="36" cy="12" r="3" fill="#b1b9ff"/></svg></div>
+      <div class="auth-float-card auth-float-card--lessons"><span class="auth-float-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 5.5v15.2M8 7h8M8 11h7"/></svg></span><span><b>Course library</b><small>Lessons, papers & quizzes</small></span></div>
+      <div class="auth-float-card auth-float-card--secure"><span class="auth-float-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg></span><span><b>Private by design</b><small>Your learning space</small></span></div>
+      <div class="auth-float-card auth-float-card--progress"><span class="auth-float-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5m0 14h17"/><path d="m7 15 4-4 3 2 5-7"/><path d="M15 6h4v4"/></svg></span><span><b>Keep progressing</b><small>One step every day</small></span></div>
+    </div><div class="auth-copy"><span class="eyebrow">YOUR SCHOOL. YOUR LEARNING.</span><h1>Build knowledge.<br><span>Move forward.</span></h1><p>One calm, focused space for lessons, practice and progress — made for the way you learn.</p></div><div class="auth-footer">Made for Sri Lankan classrooms&nbsp; · &nbsp;ආයුබෝවන්</div></section>
     <section class="auth-main"><div class="auth-card"><div class="mobile-brand"><a class="brand" href="#"><span class="brand-mark">✳</span><span>Nerva<span class="brand-green">Edu</span></span></a></div><div id="authIntro"><p class="eyebrow green-eyebrow">WELCOME TO YOUR LEARNING SPACE</p><h2 id="authTitle">Welcome back</h2><p class="muted" id="authSubtitle">Sign in to continue learning.</p></div>
       <form id="loginForm" class="auth-form" method="post" action="/"><label>Phone number<input name="phone" type="tel" inputmode="tel" pattern="[+]?[0-9() -]{9,19}" title="Enter a phone number with 9–15 digits." autocomplete="username" placeholder="07X XXX XXXX" required></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label><button class="button primary full" type="submit">Sign in <span>→</span></button></form>
       <form id="registerForm" class="auth-form hidden" method="post" action="/" novalidate><div class="role-pick"><button type="button" class="role-option selected" data-role="student">🎒 Student</button><button type="button" class="role-option" data-role="teacher">🍃 Teacher</button><input type="hidden" name="role" value="student"></div>
