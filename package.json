@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js && node --check public/assets/nervaedu-app.js",
-    "test": "npm run check"
+    "test": "npm run check && node --test"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0"

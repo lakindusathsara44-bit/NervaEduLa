@@ -69,13 +69,26 @@ async function loadDatabase(localDatabase) {
 }
 
 async function writeRows(db, collectionName, rows, documentId) {
-  // Firestore batches are capped at 500 operations. Leave headroom for portability.
-  for (let offset = 0; offset < rows.length; offset += 400) {
+  const collection = db.collection(collectionName);
+  const desiredRows = rows.map(row => {
+    const id = documentId(row);
+    if (!id) throw new Error(`A ${collectionName} record is missing its document ID.`);
+    return { id: String(id), row };
+  });
+  const desiredIds = new Set(desiredRows.map(item => item.id));
+  const snapshot = await collection.get();
+  const staleDocuments = snapshot.docs.filter(doc => !desiredIds.has(doc.id));
+  const operations = [
+    ...staleDocuments.map(doc => ({ type: 'delete', ref: doc.ref })),
+    ...desiredRows.map(item => ({ type: 'set', ref: collection.doc(item.id), row: item.row })),
+  ];
+
+  // Firestore batches are capped at 500 operations. Keep a margin for portability.
+  for (let offset = 0; offset < operations.length; offset += 400) {
     const batch = db.batch();
-    for (const row of rows.slice(offset, offset + 400)) {
-      const id = documentId(row);
-      if (!id) throw new Error(`A ${collectionName} record is missing its document ID.`);
-      batch.set(db.collection(collectionName).doc(String(id)), row);
+    for (const operation of operations.slice(offset, offset + 400)) {
+      if (operation.type === 'delete') batch.delete(operation.ref);
+      else batch.set(operation.ref, operation.row);
     }
     await batch.commit();
   }
@@ -97,4 +110,4 @@ async function saveDatabase(database) {
   ]);
 }
 
-module.exports = { enabled, loadDatabase, saveDatabase };
+module.exports = { enabled, loadDatabase, saveDatabase, writeRows };
