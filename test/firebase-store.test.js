@@ -11,7 +11,9 @@ function createFakeFirestore(initialRows) {
     collection() {
       return {
         async get() {
-          return { docs: [...records.keys()].map(id => ({ id })) };
+          return {
+            docs: [...records.keys()].map(id => ({ id, ref: { id } })),
+          };
         },
         doc(id) {
           return { id: String(id) };
@@ -39,5 +41,18 @@ test('writeRows removes Firestore documents absent from the saved database', asy
 
   assert.deepEqual([...db.records.entries()], [
     ['keep', { id: 'keep', title: 'Updated title' }],
+  ]);
+});
+
+test('writeRows rejects records without IDs before changing stored records', async () => {
+  const db = createFakeFirestore([{ id: 'keep', title: 'Existing title' }]);
+
+  await assert.rejects(
+    writeRows(db, 'resources', [{ title: 'Missing ID' }], row => row.id),
+    /resources record is missing its document ID/,
+  );
+
+  assert.deepEqual([...db.records.entries()], [
+    ['keep', { id: 'keep', title: 'Existing title' }],
   ]);
 });
