@@ -47,7 +47,10 @@ function save() {
 }
 const videoReservations = new Map();
 const authFailures = new Map();
-const SESSION_SECRET = process.env.NERVAEDU_SESSION_SECRET || process.env.NERVAEDU_ADMIN_PASSWORD || 'change-this-session-secret-in-production';
+const SESSION_SECRET = process.env.NERVAEDU_SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-only-session-secret');
+if (process.env.NODE_ENV === 'production' && SESSION_SECRET.length < 32) {
+  throw new Error('Production requires NERVAEDU_SESSION_SECRET with at least 32 characters. Configure it in the deployment secret manager.');
+}
 const SESSION_TTL = 7 * 24 * 60 * 60;
 function sessionCookieValue(userId) {
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
@@ -70,7 +73,8 @@ function issueSession(res, userId) {
 function clearSession(res) {
   res.setHeader('set-cookie', `il_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${SECURE_COOKIE}`);
 }
-function authFailureKey(req) { return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim(); }
+// Do not trust X-Forwarded-For directly: clients may supply spoofed values unless a trusted proxy chain is explicitly configured.
+function authFailureKey(req) { return String(req.socket.remoteAddress || 'unknown'); }
 function checkLoginRateLimit(req) {
   const now = Date.now(), key = authFailureKey(req), item = authFailures.get(key);
   if (item && item.blockedUntil > now) throw fail(429, 'Too many sign-in attempts. Please wait a few minutes and try again.');
@@ -656,9 +660,21 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('x-frame-options', 'DENY');
   res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('cross-origin-resource-policy', 'same-origin');
+  if (process.env.NODE_ENV === 'production') res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   try {
     if (isPrivateHttpPath(req.url)) return json(res, 404, { error: 'Not found.' });
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    // Reject cross-origin browser state changes. Non-browser clients without Origin remain supported.
+    if (url.pathname.startsWith('/api/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin) {
+      let origin;
+      try { origin = new URL(req.headers.origin); } catch { throw fail(403, 'Request origin is not allowed.'); }
+      const requestHost = String(req.headers.host || '').toLowerCase();
+      if (origin.host.toLowerCase() !== requestHost || origin.origin === 'null' ||
+          (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:')) {
+        throw fail(403, 'Cross-origin request blocked.');
+      }
+    }
     if (url.pathname.startsWith('/api/')) await api(req, res, url); else staticFile(req, res, url.pathname);
   } catch (err) { if (!res.headersSent) json(res, err.status || 400, { error: err.status ? err.message : 'Something went wrong. Check your details and try again.' }); else res.destroy(); }
 });
