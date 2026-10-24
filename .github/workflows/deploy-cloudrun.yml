@@ -54,6 +54,7 @@ jobs:
             NODE_ENV=production
             NERVAEDU_DATABASE=firestore
             FIREBASE_PROJECT_ID=nervaedu
+            NERVAEDU_CORS_ORIGINS=https://lakindusathsara44-bit.github.io
             IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/nsxnuxxghc
           secrets: |-
             NERVAEDU_ADMIN_PHONE=NERVAEDU_ADMIN_PHONE:latest
@@ -61,3 +62,4 @@ jobs:
             NERVAEDU_ADMIN_NAME=NERVAEDU_ADMIN_NAME:latest
             IMAGEKIT_PUBLIC_KEY=IMAGEKIT_PUBLIC_KEY:latest
             IMAGEKIT_PRIVATE_KEY=IMAGEKIT_PRIVATE_KEY:latest
+
