@@ -191,6 +191,7 @@
   });
 })();
 </script>
+  <script>window.NERVAEDU_API_BASE = "";</script>
   <script src="./assets/catalog.js" defer></script>
   <script src="./assets/nervaedu-app.js" defer></script>
 </head>
@@ -298,3 +299,4 @@
   <script>window.addEventListener('error', function (event) { if (event.filename && /nervaedu-app\.js|catalog\.js/.test(event.filename)) { var status = document.getElementById('authMessage'); if (status) status.textContent = 'NervaEdu could not start. Refresh this page and try again.'; } }); window.addEventListener('unhandledrejection', function () { var status = document.getElementById('authMessage'); if (status && !status.textContent) status.textContent = 'NervaEdu could not connect. Check that the local server is running, then refresh.'; });</script>
 </body>
 </html>
+
