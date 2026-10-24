@@ -401,9 +401,9 @@ $('#welcomeCreate').onclick = () => continueFromWelcome(true);
 $('#reviewContinue').onclick = () => continueFromWelcome(false);
 $('#guideTab').onclick = () => setWelcomeTab('guide');
 $('#reviewTab').onclick = () => { setWelcomeTab('review'); renderLocalReviews(); };
-$('[data-rating]').forEach(button => button.onclick = () => {
+$$('[data-rating]').forEach(button => button.onclick = () => {
   welcomeRating = Number(button.dataset.rating);
-  $('[data-rating]').forEach(star => {
+  $$('[data-rating]').forEach(star => {
     const selected = Number(star.dataset.rating) <= welcomeRating;
     star.classList.toggle('is-selected', selected);
     star.setAttribute('aria-pressed', String(Number(star.dataset.rating) === welcomeRating));
@@ -420,16 +420,16 @@ $('#welcomeReviewForm').onsubmit = event => {
     reviews.unshift({ rating: welcomeRating, text: text.slice(0, 400), savedAt: new Date().toISOString() });
     localStorage.setItem('nervaeduLocalReviews', JSON.stringify(reviews.slice(0, 3)));
     $('#welcomeReviewText').value = ''; welcomeRating = 0;
-    $('[data-rating]').forEach(star => { star.classList.remove('is-selected'); star.setAttribute('aria-pressed', 'false'); });
+    $$('[data-rating]').forEach(star => { star.classList.remove('is-selected'); star.setAttribute('aria-pressed', 'false'); });
     $('#welcomeReviewStatus').textContent = 'Review saved on this device. It has not been sent to the NervaEdu team.';
     renderLocalReviews();
   } catch { $('#welcomeReviewStatus').textContent = 'This browser could not save your review. Please check browser storage settings.'; }
 };
-$('.welcome-socials a').forEach(link => link.onclick = event => event.preventDefault());
+$$('.welcome-socials a').forEach(link => link.onclick = event => event.preventDefault());
 renderLocalReviews();
 
 $('#switchAuth').onclick = () => chooseAuth(true); populateSubjects(); chooseAuth(false);
-$('.role-option').forEach(button => button.onclick = () => setRegRole(button.dataset.role));
+$$('.role-option').forEach(button => button.onclick = () => setRegRole(button.dataset.role));
 $('#registerForm').elements.qualification.addEventListener('change', () => setRegRole($('#registerForm').elements.role.value));
 $('#registerForm').onsubmit = async event => {
   event.preventDefault(); const form = event.currentTarget, role = form.elements.role.value;
