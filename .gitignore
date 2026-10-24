@@ -13,6 +13,8 @@
 Thumbs.db
 /.npm-cache/
 /.test-run/
+/_site/
 *.log
 *.bak
 *.backup
+
