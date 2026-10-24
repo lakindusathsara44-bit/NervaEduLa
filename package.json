@@ -5,7 +5,8 @@
   "description": "A small, local-first learning space for students and teachers.",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/assets/nervaedu-app.js",
+    "build:pages": "node scripts/build-pages.js",
+    "check": "node --check server.js && node --check public/assets/nervaedu-app.js && node --check scripts/build-pages.js",
     "test": "npm run check && node --test"
   },
   "dependencies": {
@@ -15,3 +16,4 @@
     "node": ">=22"
   }
 }
+
