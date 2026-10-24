@@ -30,19 +30,10 @@ jobs:
           node-version: '22.x'
 
       - name: Build the public frontend
+        env:
+          NERVAEDU_API_URL: ${{ vars.NERVAEDU_API_URL }}
         run: |
-          mkdir -p _site
-          cp -R public/. _site/
-          node <<'NODE'
-          const fs = require('node:fs');
-          const subjects = require('./subjects.js');
-          const catalog = {};
-          for (const key of ['OL_NAMES', 'AL_NAMES', 'OL_SUBJECTS', 'AL_SUBJECTS', 'SCHOLARSHIP_NAMES', 'SCHOLARSHIP_SUBJECTS', 'EXAM_SUBJECTS']) {
-            catalog[key] = subjects[key];
-          }
-          fs.writeFileSync('_site/assets/catalog.js', 'window.NERVAEDU_SUBJECTS = ' + JSON.stringify(catalog) + ';\\n');
-          fs.writeFileSync('_site/.nojekyll', '');
-          NODE
+          node scripts/build-pages.js
           test -s _site/index.html
           test -s _site/assets/nervaedu-app.js
           test -s _site/assets/catalog.js
@@ -60,3 +51,4 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
