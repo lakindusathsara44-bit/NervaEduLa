@@ -3,10 +3,21 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 let currentUser = null, currentPage = 'overview', toastTimer;
 let selectedTeacherSubject = 'O/L — Mathematics', selectedResourceSubject = '', selectedQuizSubject = '';
+const API_BASE = String(window.NERVAEDU_API_BASE || '').trim().replace(/\/+$/, '');
+const SESSION_KEY = 'nervaedu.session';
+function apiAsset(value) { return API_BASE && typeof value === 'string' && value.startsWith('/') ? `${API_BASE}${value}` : value; }
 async function api(path, options = {}) {
-  const response = await fetch(path, { credentials: 'same-origin', ...options });
-  let data; try { data = await response.json(); } catch { throw new Error('The server sent an unreadable response.'); }
+  if (!API_BASE && /(^|\\.)github\\.io$/i.test(location.hostname)) throw new Error('The NervaEdu backend is not configured for this GitHub Pages site. The site owner must deploy Cloud Run and set the NERVAEDU_API_URL Actions variable.');
+  const headers = new Headers(options.headers || {});
+  const token = sessionStorage.getItem(SESSION_KEY);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  let response;
+  try { response = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin', ...options, headers }); }
+  catch { throw new Error('Cannot reach the NervaEdu API. Check the Cloud Run URL and its allowed GitHub Pages origin.'); }
+  let data; try { data = await response.json(); } catch { throw new Error(`NervaEdu API returned a non-JSON response (HTTP ${response.status}). Check that NERVAEDU_API_URL points to the Cloud Run backend.`); }
   if (!response.ok) throw new Error(data.error || 'The request could not be completed.');
+  if (data.sessionToken) sessionStorage.setItem(SESSION_KEY, data.sessionToken);
+  if (path === '/api/logout') sessionStorage.removeItem(SESSION_KEY);
   return data;
 }
 async function uploadToImageKit(file, { subject, title, priceLkr }) {
@@ -124,7 +135,7 @@ async function showApp(user) {
   currentUser = user; $('#authScreen').classList.add('hidden'); $('#appScreen').classList.remove('hidden');
   $('#schoolName').textContent = user.role === 'student' ? user.school : user.role === 'admin' ? 'Account manager' : 'Teacher workspace';
   $('#schoolCaption').textContent = user.role === 'student' ? `Age ${user.age} · Student` : user.role === 'admin' ? 'Teacher verification & plans' : (user.subjects || []).join(' · ');
-  const avatar = user.thumbnail ? `<img class="avatar" src="${safe(user.thumbnail)}" alt="">` : `<span class="avatar">${safe(initials(user.name))}</span>`;
+  const avatar = user.thumbnail ? `<img class="avatar" src="${safe(apiAsset(user.thumbnail))}" alt="">` : `<span class="avatar">${safe(initials(user.name))}</span>`;
   $('#profileButton').innerHTML = `${avatar}<span><b>${safe(user.name)}</b><small>${user.role === 'student' ? 'Student' : user.role === 'admin' ? 'Account manager' : 'Teacher profile'}</small></span>`;
   $('#mobileProfile').textContent = initials(user.name);
   history.replaceState({ lmsPage: 'overview' }, '', location.pathname);
@@ -191,7 +202,7 @@ async function adminTeachersPage() {
     const qualification = teacher.qualification === 'Other' ? teacher.otherQualification : teacher.qualification;
     const status = teacher.verificationStatus;
     const buttons = status === 'pending' ? `<button class="button primary small" data-verify-teacher="${safe(teacher.id)}" data-approved="true">Approve teacher</button><button class="button secondary small" data-verify-teacher="${safe(teacher.id)}" data-approved="false">Reject</button>` : status === 'rejected' ? `<button class="button primary small" data-verify-teacher="${safe(teacher.id)}" data-approved="true">Approve teacher</button>` : '<span class="admin-status verified">Verified</span>';
-    return `<article class="admin-review-row"><div class="teacher-photo">${teacher.thumbnail ? `<img class="teacher-photo" src="${safe(teacher.thumbnail)}" alt="">` : safe(initials(teacher.name))}</div><div class="admin-review-details"><b>${safe(teacher.name)}</b><small>${safe(teacher.subjects.join(', '))}</small><small>${safe(qualification || 'Qualification not provided')} · Call ${formatPhone(teacher.phone)} · WhatsApp ${formatPhone(teacher.whatsapp)}</small><small>Status: ${safe(status)} · ${teacher.plan.studentCount} student${teacher.plan.studentCount === 1 ? '' : 's'}</small></div><div class="admin-review-actions">${buttons}</div></article>`;
+    return `<article class="admin-review-row"><div class="teacher-photo">${teacher.thumbnail ? `<img class="teacher-photo" src="${safe(apiAsset(teacher.thumbnail))}" alt="">` : safe(initials(teacher.name))}</div><div class="admin-review-details"><b>${safe(teacher.name)}</b><small>${safe(teacher.subjects.join(', '))}</small><small>${safe(qualification || 'Qualification not provided')} · Call ${formatPhone(teacher.phone)} · WhatsApp ${formatPhone(teacher.whatsapp)}</small><small>Status: ${safe(status)} · ${teacher.plan.studentCount} student${teacher.plan.studentCount === 1 ? '' : 's'}</small></div><div class="admin-review-actions">${buttons}</div></article>`;
   }).join('');
   return `<section class="tab-header"><div><h1>Verify teachers</h1><p>Review teacher subjects and qualifications before publishing their profiles.</p></div></section><section class="panel">${rows || '<div class="empty-state"><span>✓</span>No teacher accounts yet.</div>'}</section>`;
 }
@@ -222,7 +233,7 @@ async function teachersPage(subjectValue = '') {
 }
 function teacherCard(t, selected, subject) {
   const qual = t.qualification === 'Other' ? t.otherQualification : t.qualification;
-  const photo = t.thumbnail ? `<img class="teacher-photo" src="${safe(t.thumbnail)}" alt="${safe(t.name)}">` : `<div class="teacher-photo">${safe(initials(t.name))}</div>`;
+  const photo = t.thumbnail ? `<img class="teacher-photo" src="${safe(apiAsset(t.thumbnail))}" alt="${safe(t.name)}">` : `<div class="teacher-photo">${safe(initials(t.name))}</div>`;
   return `<article class="teacher-card"><div class="teacher-top">${photo}<div><h3>${safe(t.name)}</h3><div class="qual">${safe(qual || 'Teacher')}${t.otherQualification && t.qualification !== 'Other' ? ` · ${safe(t.otherQualification)}` : ''}</div></div></div><div class="teacher-subjects">${t.subjects.map(s => `<span class="subject-tag">${subjectIcon(s)} ${safe(s)}</span>`).join('')}</div><div class="teacher-contacts"><span class="field-hint">Contact details are shared securely when you request paid video access.</span></div><button class="button ${selected ? 'secondary' : 'primary'} small" data-choose-teacher="${safe(t.id)}" data-subject="${safe(subject)}">${selected ? '✓ Your selected teacher' : 'Choose for ' + safe(subject)}</button></article>`;
 }
 async function studentResourcesPage(subjectValue = '') {
@@ -249,7 +260,7 @@ async function studentResourcesPage(subjectValue = '') {
 function resourceRow(r) {
   const isVideo = r.type === 'video';
   const price = isVideo ? `<span class="price-tag">${Number.isSafeInteger(Number(r.priceLkr)) ? formatLkr(r.priceLkr) : 'Price not set'}</span>` : '';
-  let action = `<a class="download" href="${safe(r.url)}" target="_blank" rel="noopener">${isVideo ? 'Play' : 'Open ↗'}</a>`;
+  let action = `<a class="download" href="${safe(apiAsset(r.url))}" target="_blank" rel="noopener">${isVideo ? 'Play' : 'Open ↗'}</a>`;
   if (isVideo && r.accessStatus !== 'unlocked') {
     action = Number.isSafeInteger(Number(r.priceLkr))
       ? `<button class="button ${r.accessStatus === 'pending' ? 'secondary' : 'primary'} small" data-request-video="${safe(r.id)}" data-pending="${r.accessStatus === 'pending'}">${r.accessStatus === 'pending' ? 'Send receipt on WhatsApp again' : 'Request access'}</button>`
@@ -282,10 +293,10 @@ async function teachersForProfile(subject) { return api('/api/teachers?subject='
 async function profilePage() {
   const u = currentUser;
   if (u.role === 'student') { const { choices } = await api('/api/my-choices'); const chosen = await Promise.all(Object.entries(choices).map(async ([subject, id]) => { const { teachers } = await teachersForProfile(subject); return teachers.find(t => t.id === id); }));
-    return `<section class="tab-header"><div><h1>My account</h1><p>Your student details and selected subject teachers.</p></div></section><section class="panel profile-panel"><div class="profile-large">${safe(initials(u.name))}</div><div class="profile-detail"><h2>${safe(u.name)}</h2><p>Student · Age ${u.age} · ${safe(u.school)}</p><div class="profile-meta"><div><small>Phone</small><b>${formatPhone(u.phone)}</b></div><div><small>Home address</small><b>${safe(u.address)}</b></div></div></div></section><section class="panel section-spacer"><div class="panel-head"><div><h2>My chosen teachers</h2><p>Choose a teacher for each subject from their profile cards.</p></div><button class="button secondary small" data-goto="teachers">Find teachers</button></div>${chosen.filter(Boolean).length ? chosen.filter(Boolean).map(t => `<div class="resource-row"><div class="teacher-photo">${t.thumbnail ? `<img class="teacher-photo" src="${safe(t.thumbnail)}" alt="">` : safe(initials(t.name))}</div><div><b>${safe(t.name)}</b><small>${safe(t.subjects.join(', '))} · ${safe(t.qualification === 'Other' ? t.otherQualification : t.qualification)}</small></div></div>`).join('') : '<div class="empty-state">No teacher selected yet. Browse profiles to choose one for each subject.</div>'}</section>`;
+    return `<section class="tab-header"><div><h1>My account</h1><p>Your student details and selected subject teachers.</p></div></section><section class="panel profile-panel"><div class="profile-large">${safe(initials(u.name))}</div><div class="profile-detail"><h2>${safe(u.name)}</h2><p>Student · Age ${u.age} · ${safe(u.school)}</p><div class="profile-meta"><div><small>Phone</small><b>${formatPhone(u.phone)}</b></div><div><small>Home address</small><b>${safe(u.address)}</b></div></div></div></section><section class="panel section-spacer"><div class="panel-head"><div><h2>My chosen teachers</h2><p>Choose a teacher for each subject from their profile cards.</p></div><button class="button secondary small" data-goto="teachers">Find teachers</button></div>${chosen.filter(Boolean).length ? chosen.filter(Boolean).map(t => `<div class="resource-row"><div class="teacher-photo">${t.thumbnail ? `<img class="teacher-photo" src="${safe(apiAsset(t.thumbnail))}" alt="">` : safe(initials(t.name))}</div><div><b>${safe(t.name)}</b><small>${safe(t.subjects.join(', '))} · ${safe(t.qualification === 'Other' ? t.otherQualification : t.qualification)}</small></div></div>`).join('') : '<div class="empty-state">No teacher selected yet. Browse profiles to choose one for each subject.</div>'}</section>`;
   }
   const qualification = u.qualification === 'Other' ? u.otherQualification : u.qualification;
-  const picture = u.thumbnail ? `<img class="profile-large" src="${safe(u.thumbnail)}" alt="${safe(u.name)}">` : `<div class="profile-large">${safe(initials(u.name))}</div>`;
+  const picture = u.thumbnail ? `<img class="profile-large" src="${safe(apiAsset(u.thumbnail))}" alt="${safe(u.name)}">` : `<div class="profile-large">${safe(initials(u.name))}</div>`;
   return `<section class="tab-header"><div><h1>Teacher profile</h1><p>This profile is shown to students looking for your subjects.</p></div></section><section class="panel profile-panel">${picture}<div class="profile-detail"><h2>${safe(u.name)}</h2><p>Teacher · Hillview learning space</p><div class="teacher-subjects">${u.subjects.map(s => `<span class="subject-tag">${subjectIcon(s)} ${safe(s)}</span>`).join('')}</div><div class="profile-meta"><div><small>Qualification</small><b>${safe(qualification)}</b></div>${u.otherQualification && u.qualification !== 'Other' ? `<div><small>Additional qualification</small><b>${safe(u.otherQualification)}</b></div>` : ''}<div><small>Call</small><b><a href="tel:${encodeURIComponent(u.phone)}">${formatPhone(u.phone)}</a></b></div><div><small>WhatsApp</small><b><a href="https://wa.me/${u.whatsapp.replace(/\D/g, '')}" target="_blank" rel="noopener">${formatPhone(u.whatsapp)}</a></b></div><div><small>Profile photo</small><b>${u.thumbnail ? 'Added' : 'Not added'}</b></div></div></div></section>`;
 }
 function renderVideoPriceFields() {
@@ -458,3 +469,4 @@ $('#logoutButton').onclick = signOut;
 $('#topLogout').onclick = signOut;
 $('#profileButton').onclick = () => renderPage('profile'); $('#mobileProfile').onclick = () => renderPage('profile');
 api('/api/me').then(({ user }) => user ? showApp(user) : showWelcome()).catch(() => showWelcome()).finally(() => window.NervaLoader?.hide());
+
