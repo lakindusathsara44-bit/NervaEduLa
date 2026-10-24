@@ -28,6 +28,7 @@ if (!fs.existsSync(DB_FILE) && fs.existsSync(LEGACY_DB_FILE)) fs.copyFileSync(LE
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 const SECURE_COOKIE = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+const CORS_ORIGINS = new Set(String(process.env.NERVAEDU_CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean));
 const MAX_FORM = 8 * 1024 * 1024;
 const MAX_RESOURCE = 130 * 1024 * 1024;
 const imageKitEndpoint = (process.env.IMAGEKIT_URL_ENDPOINT || '').replace(/\/$/, '');
@@ -66,6 +67,33 @@ function verifySessionToken(token) {
 function issueSession(res, userId) {
   const token = sessionCookieValue(userId);
   res.setHeader('set-cookie', `il_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}${SECURE_COOKIE}`);
+  return token;
+}
+const DOWNLOAD_TTL = 10 * 60;
+function signedDownloadUrl(resource, user) {
+  const exp = Math.floor(Date.now() / 1000) + DOWNLOAD_TTL;
+  const payload = `${resource.id}.${user.id}.${exp}`;
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(`download:${payload}`).digest('base64url');
+  const route = resource.imageKitPrivate ? `/media/${resource.id}` : resource.url;
+  return `${route}?user=${encodeURIComponent(user.id)}&exp=${exp}&sig=${sig}`;
+}
+function signedDownloadUser(req, url, resource) {
+  const viewer = sessionUser(req);
+  if (viewer) return viewer;
+  const userId = url.searchParams.get('user') || '', exp = url.searchParams.get('exp') || '', sig = url.searchParams.get('sig') || '';
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^\d{10}$/.test(exp) || !/^[A-Za-z0-9_-]{43}$/.test(sig)) return null;
+  const expiresAt = Number(exp), now = Math.floor(Date.now() / 1000);
+  if (expiresAt < now || expiresAt > now + DOWNLOAD_TTL + 30) return null;
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(`download:${resource.id}.${userId}.${exp}`).digest('base64url');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  return db.users.find(user => user.id === userId) || null;
+}
+function mayReadResource(user, resource) {
+  if (!user || !resource) return false;
+  if (user.role === 'admin') return true;
+  if (user.role === 'teacher') return resource.teacherId === user.id;
+  if (user.role !== 'student' || !studentCanSeeTeacherContent(user.id, resource)) return false;
+  return resource.type !== 'video' || videoIsUnlocked(user.id, resource);
 }
 function clearSession(res) {
   res.setHeader('set-cookie', `il_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${SECURE_COOKIE}`);
@@ -191,7 +219,8 @@ function multipart(buffer, contentType) {
   return { fields, files };
 }
 function sessionUser(req) {
-  const token = /(?:^|;\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+  const bearerToken = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
+  const token = bearerToken || /(?:^|;\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
   const id = verifySessionToken(token);
   return id && db.users.find(u => u.id === id);
 }
@@ -301,8 +330,8 @@ async function api(req, res, url) {
     const passwordHash = crypto.scryptSync(password, salt, 64).toString('hex');
     db.users.push({ ...user, salt, passwordHash });
     await save();
-    issueSession(res, user.id);
-    return json(res, 201, { user: privateUser(user) });
+    const sessionToken = issueSession(res, user.id);
+    return json(res, 201, { user: privateUser(user), sessionToken });
   }
   if (method === 'POST' && p === '/api/login') {
     checkLoginRateLimit(req);
@@ -312,8 +341,8 @@ async function api(req, res, url) {
     const candidate = user && crypto.scryptSync(String(password || ''), user.salt, 64).toString('hex');
     if (!user || !crypto.timingSafeEqual(Buffer.from(candidate, 'hex'), Buffer.from(user.passwordHash, 'hex'))) { recordLoginFailure(req); throw fail(401, 'Phone number or password is incorrect.'); }
     clearLoginFailures(req);
-    issueSession(res, user.id);
-    return json(res, 200, { user: privateUser(user) });
+    const sessionToken = issueSession(res, user.id);
+    return json(res, 200, { user: privateUser(user), sessionToken });
   }
   if (method === 'POST' && p === '/api/logout') {
     clearSession(res); return json(res, 200, { ok: true });
@@ -550,9 +579,13 @@ async function api(req, res, url) {
   if (method === 'GET' && p === '/api/resources') {
     const subject = clean(url.searchParams.get('subject'), 100);
     const resources = db.resources.filter(r => (!subject || r.subject === subject) && (me.role === 'teacher' ? r.teacherId === me.id : me.role === 'student' ? studentCanSeeTeacherContent(me.id, r) : true)).map(resource => {
-      if (me.role !== 'student' || resource.type !== 'video') return resource;
-      const accessStatus = videoAccessStatus(me.id, resource);
-      return { ...resource, accessStatus, ...(!videoIsUnlocked(me.id, resource) ? { url: null, imageKitFileId: undefined, imageKitFilePath: undefined } : {}) };
+      const visible = { ...resource };
+      if (me.role === 'student' && resource.type === 'video') {
+        visible.accessStatus = videoAccessStatus(me.id, resource);
+        if (!videoIsUnlocked(me.id, resource)) { visible.url = null; delete visible.imageKitFileId; delete visible.imageKitFilePath; return visible; }
+      }
+      if (resource.imageKitPrivate || (typeof resource.url === 'string' && resource.url.startsWith('/uploads/'))) visible.url = signedDownloadUrl(resource, me);
+      return visible;
     });
     const videoPacks = db.videoPacks.filter(pack => me.role === 'teacher' ? pack.teacherId === me.id : me.role === 'student' ? studentSelectedTeacherId(me.id, pack.subject) === pack.teacherId : true);
     const accessRequests = me.role === 'student' ? db.accessRequests.filter(item => item.studentId === me.id) : [];
@@ -583,15 +616,15 @@ async function api(req, res, url) {
   }
   throw fail(404, 'That page or action was not found.');
 }
-function staticFile(req, res, pathname) {
+function staticFile(req, res, pathname, url) {
   let decoded; try { decoded = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'Invalid URL.' }); }
   const media = /^\/media\/([0-9a-f-]{36})$/i.exec(decoded);
   if (media) {
-    const viewer = sessionUser(req);
-    if (!viewer) return json(res, 401, { error: 'Please sign in to view this video.' });
     const resource = db.resources.find(item => item.id === media[1] && item.type === 'video' && item.imageKitPrivate && item.imageKitFilePath);
     if (!resource) return json(res, 404, { error: 'Video not found.' });
-    if (viewer.role !== 'admin' && !(viewer.role === 'teacher' && resource.teacherId === viewer.id) && !(viewer.role === 'student' && videoIsUnlocked(viewer.id, resource))) return json(res, 403, { error: 'This video is locked. Ask the teacher to unlock it after checking your payment receipt.' });
+    const viewer = signedDownloadUser(req, url, resource);
+    if (!viewer) return json(res, 401, { error: 'Please sign in to view this video.' });
+    if (!mayReadResource(viewer, resource)) return json(res, 403, { error: 'This video is locked or is not assigned to your account.' });
     try { res.writeHead(302, { location: signedImageKitUrl(resource.imageKitFilePath), 'cache-control': 'private, no-store' }); return res.end(); }
     catch (error) { return json(res, error.status || 503, { error: error.message }); }
   }
@@ -599,13 +632,14 @@ function staticFile(req, res, pathname) {
     const name = decoded.slice('/uploads/'.length);
     if (!/^[0-9a-f-]{36}\.(?:jpg|png|webp|mp4|webm|mov|pdf)$/i.test(name)) return json(res, 404, { error: 'File not found.' });
     const viewer = sessionUser(req);
-    if (!viewer) return json(res, 401, { error: 'Please sign in to view this file.' });
     const assetURL = '/uploads/' + name;
     const resource = db.resources.find(item => item.url === assetURL);
     const isTeacherPhoto = db.users.some(user => user.role === 'teacher' && user.thumbnail === assetURL);
     if (!resource && !isTeacherPhoto) return json(res, 404, { error: 'File not found.' });
-    if (viewer.role === 'student' && resource?.type === 'video' && !videoIsUnlocked(viewer.id, resource)) return json(res, 403, { error: 'This video is locked. Ask the teacher to unlock it after checking your payment receipt.' });
-    if (viewer.role === 'teacher' && resource && resource.teacherId !== viewer.id) return json(res, 403, { error: 'You cannot view another teacher’s resource.' });
+    const authorizedViewer = viewer || (resource ? signedDownloadUser(req, url, resource) : null);
+    if (!authorizedViewer && !isTeacherPhoto) return json(res, 401, { error: 'Please sign in to view this file.' });
+    if (resource && !mayReadResource(authorizedViewer, resource)) return json(res, 403, { error: 'This file is locked or is not assigned to your account.' });
+    if (viewer?.role === 'teacher' && resource && resource.teacherId !== viewer.id) return json(res, 403, { error: 'You cannot view another teacher’s resource.' });
     const file = path.resolve(UPLOAD_DIR, name);
     if (!file.startsWith(UPLOAD_DIR + path.sep)) return json(res, 404, { error: 'File not found.' });
     if (!fs.existsSync(file)) return json(res, 404, { error: 'File not found.' });
@@ -651,6 +685,23 @@ function staticFile(req, res, pathname) {
   if (req.method === 'HEAD') return res.end();
   return fs.createReadStream(target).pipe(res);
 }
+function applyApiCors(req, res, url) {
+  if (!url.pathname.startsWith('/api/')) return false;
+  const origin = req.headers.origin;
+  const allowed = Boolean(origin && CORS_ORIGINS.has(origin));
+  if (allowed) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'Origin');
+    res.setHeader('access-control-allow-methods', 'GET, POST, PUT, OPTIONS');
+    res.setHeader('access-control-allow-headers', 'Authorization, Content-Type');
+    res.setHeader('access-control-max-age', '600');
+  }
+  if (req.method !== 'OPTIONS') return false;
+  if (!allowed) { json(res, 403, { error: 'Origin is not allowed.' }); return true; }
+  res.writeHead(204, { 'cache-control': 'no-store' });
+  res.end();
+  return true;
+}
 const server = http.createServer(async (req, res) => {
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('x-frame-options', 'DENY');
@@ -659,7 +710,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (isPrivateHttpPath(req.url)) return json(res, 404, { error: 'Not found.' });
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    if (url.pathname.startsWith('/api/')) await api(req, res, url); else staticFile(req, res, url.pathname);
+    if (applyApiCors(req, res, url)) return;
+    if (url.pathname.startsWith('/api/')) await api(req, res, url); else staticFile(req, res, url.pathname, url);
   } catch (err) { if (!res.headersSent) json(res, err.status || 400, { error: err.status ? err.message : 'Something went wrong. Check your details and try again.' }); else res.destroy(); }
 });
 async function ensureAccountManager() {
@@ -699,3 +751,4 @@ async function start() {
   }
 }
 start();
+
