@@ -55,7 +55,11 @@ The repository already has Node test coverage for Pages API registration/login/r
 - allowing an assigned student to submit a quiz and rejecting an unassigned student;
 - refusing production startup when the dedicated session secret is missing.
 
-**Not yet verified at the time this report was authored:** the full `npm test` run, `npm audit` results, GitHub Actions completion, Cloud Run deployment, real Firestore behavior under concurrent writers, ImageKit production upload, and browser/manual UI testing. Do not treat this report or branch as production approval.
+**Verified in GitHub Actions on branch head `af8fabfee24a6f138b81acfa313fbe2ec7ae0896`:** `npm test` passed all 7 tests (7 passed, 0 failed), and both the Node.js checks and NervaEdu branch CI workflows completed successfully. The tests include the new Origin, quiz ownership, and production-secret cases.
+
+**Dependency audit result:** `npm audit` reported 7 moderate, 0 high, and 0 critical advisories. The affected transitive packages are `gaxios`, `gcp-metadata`, `glob`, `google-gax`, `minimatch`, `rimraf`, and `uuid`; npm reported a fix available for each. They have not yet been upgraded in this branch because the lockfile changes still need compatibility review and a fresh regression run. The install also emitted deprecation warnings for `uuid@9` and `glob`.
+
+Still not verified: Cloud Run deployment, live Firestore behavior under concurrent writers, ImageKit production upload, production authorization against real data, and browser/manual UI testing. Do not treat this report or branch as production approval.
 
 ## Deployment action required before production release
 
