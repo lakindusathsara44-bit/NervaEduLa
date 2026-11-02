@@ -5,7 +5,7 @@ GitHub Pages serves the static frontend. The Node.js API and Firestore access ru
 ## Deploy the API
 
 1. Configure the repository Actions variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_SERVICE_ACCOUNT` for the Google Workload Identity Federation provider and deployment service account.
-2. Create the `NERVAEDU_ADMIN_PHONE`, `NERVAEDU_ADMIN_PASSWORD`, `NERVAEDU_ADMIN_NAME`, `IMAGEKIT_PUBLIC_KEY`, and `IMAGEKIT_PRIVATE_KEY` secrets in Google Secret Manager. Grant the Cloud Run runtime service account access to those secrets and the Firestore database.
+2. Create the `NERVAEDU_ADMIN_PHONE`, `NERVAEDU_ADMIN_PASSWORD`, `NERVAEDU_ADMIN_NAME`, `NERVAEDU_SESSION_SECRET`, `IMAGEKIT_PUBLIC_KEY`, and `IMAGEKIT_PRIVATE_KEY` secrets in Google Secret Manager. Generate `NERVAEDU_SESSION_SECRET` as a random value of at least 32 characters; do not reuse the admin password. Grant the Cloud Run runtime service account access to those secrets and the Firestore database.
 3. Run **Deploy NervaEdu to Cloud Run** from the repository Actions tab. The workflow validates the federation variables before attempting deployment and prints the Cloud Run service URL after a successful deployment.
 
 ## Connect GitHub Pages to the API
@@ -16,3 +16,9 @@ GitHub Pages serves the static frontend. The Node.js API and Firestore access ru
 
 If `NERVAEDU_API_URL` is unset, Pages still publishes the interface, but account and learning API actions show a setup message. Registration cannot work until the API is deployed and that variable is set.
 
+
+## Security configuration notes
+
+- Production startup now fails closed unless `NERVAEDU_SESSION_SECRET` is configured with at least 32 characters. Add the same secret to the local `.env` file when testing production mode.
+- State-changing browser API requests accept same-origin requests or an exact origin listed in `NERVAEDU_CORS_ORIGINS`. The GitHub Pages origin is intentionally cross-origin from Cloud Run and must remain explicitly allowlisted.
+- Login throttling no longer trusts raw `X-Forwarded-For`. Behind Cloud Run or another reverse proxy, the transport peer may be shared; use a trusted-proxy-aware distributed rate limiter before treating this in-memory limit as per-user protection.
