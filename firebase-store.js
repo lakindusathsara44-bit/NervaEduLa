@@ -177,6 +177,95 @@ async function commitDatabase(db, database, expectedRevision) {
   });
 }
 
+
+// Sessions live in their own Firestore collection so every application instance
+// validates revocation against shared, authoritative state.
+const SESSION_COLLECTION = 'sessions';
+const MAX_ACTIVE_SESSIONS = 5;
+
+function sessionDocument(db, sessionId) {
+  return db.collection(SESSION_COLLECTION).doc(sessionId);
+}
+
+async function createSessionRecord(session) {
+  const db = getFirestore();
+  const collection = db.collection(SESSION_COLLECTION);
+  const query = collection.where('userId', '==', session.userId);
+  const ref = sessionDocument(db, session.id);
+  await db.runTransaction(async transaction => {
+    const existing = await transaction.get(query);
+    const now = Math.floor(Date.now() / 1000);
+    const active = existing.docs
+      .map(doc => ({ ref: doc.ref, data: doc.data() }))
+      .filter(item => Number.isSafeInteger(item.data.expiresAt) && item.data.expiresAt > now)
+      .sort((a, b) => a.data.createdAt - b.data.createdAt);
+    for (const item of existing.docs.map(doc => ({ ref: doc.ref, data: doc.data() }))) {
+      if (!Number.isSafeInteger(item.data.expiresAt) || item.data.expiresAt <= now) transaction.delete(item.ref);
+    }
+    while (active.length >= MAX_ACTIVE_SESSIONS) transaction.delete(active.shift().ref);
+    transaction.create(ref, session);
+  });
+}
+
+async function getSessionRecord(sessionId) {
+  const snapshot = await sessionDocument(getFirestore(), sessionId).get();
+  return snapshot.exists ? snapshot.data() : null;
+}
+
+async function revokeSessionRecord(sessionId, userId) {
+  const db = getFirestore();
+  const ref = sessionDocument(db, sessionId);
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists || snapshot.data().userId !== userId) return false;
+    transaction.delete(ref);
+    return true;
+  });
+}
+
+async function revokeAllSessionRecords(userId) {
+  const db = getFirestore();
+  const query = db.collection(SESSION_COLLECTION).where('userId', '==', userId);
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(query);
+    if (snapshot.size > MAX_TRANSACTION_WRITES - 1) {
+      throw new Error('Too many active sessions to revoke safely; investigate session-store integrity.');
+    }
+    for (const doc of snapshot.docs) transaction.delete(doc.ref);
+    return snapshot.size;
+  });
+}
+
+async function rotateSessionRecord(oldSessionId, userId, newSession) {
+  const db = getFirestore();
+  const collection = db.collection(SESSION_COLLECTION);
+  const oldRef = sessionDocument(db, oldSessionId);
+  const newRef = sessionDocument(db, newSession.id);
+  const query = collection.where('userId', '==', userId);
+  await db.runTransaction(async transaction => {
+    const oldSnapshot = await transaction.get(oldRef);
+    const existing = await transaction.get(query);
+    if (!oldSnapshot.exists || oldSnapshot.data().userId !== userId) {
+      const error = new Error('The current session is no longer active. Please sign in again.');
+      error.code = 'NERVAEDU_SESSION_REVOKED';
+      throw error;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const active = existing.docs
+      .filter(doc => doc.id !== oldSessionId)
+      .map(doc => ({ ref: doc.ref, data: doc.data() }))
+      .filter(item => Number.isSafeInteger(item.data.expiresAt) && item.data.expiresAt > now)
+      .sort((a, b) => a.data.createdAt - b.data.createdAt);
+    transaction.delete(oldRef);
+    for (const doc of existing.docs) {
+      const data = doc.data();
+      if (doc.id !== oldSessionId && (!Number.isSafeInteger(data.expiresAt) || data.expiresAt <= now)) transaction.delete(doc.ref);
+    }
+    while (active.length >= MAX_ACTIVE_SESSIONS) transaction.delete(active.shift().ref);
+    transaction.create(newRef, newSession);
+  });
+}
+
 async function saveDatabase(database) {
   if (!enabled()) return;
   if (loadedRevision === null) throw new Error('Firestore database must be loaded before it can be saved.');
@@ -184,4 +273,4 @@ async function saveDatabase(database) {
   loadedRevision = nextRevision;
 }
 
-module.exports = { enabled, loadDatabase, saveDatabase, commitDatabase };
+module.exports = { enabled, loadDatabase, saveDatabase, commitDatabase, createSessionRecord, getSessionRecord, revokeSessionRecord, revokeAllSessionRecords, rotateSessionRecord };
