@@ -17,7 +17,7 @@ async function api(path, options = {}) {
   let data; try { data = await response.json(); } catch { throw new Error(`NervaEdu API returned a non-JSON response (HTTP ${response.status}). Check that NERVAEDU_API_URL points to the Cloud Run backend.`); }
   if (!response.ok) throw new Error(data.error || 'The request could not be completed.');
   if (data.sessionToken) sessionStorage.setItem(SESSION_KEY, data.sessionToken);
-  if (path === '/api/logout') sessionStorage.removeItem(SESSION_KEY);
+  if (path === '/api/logout' || path === '/api/logout-all') sessionStorage.removeItem(SESSION_KEY);
   return data;
 }
 async function uploadToImageKit(file, { subject, title, priceLkr }) {
@@ -468,5 +468,7 @@ async function signOut() {
 $('#logoutButton').onclick = signOut;
 $('#topLogout').onclick = signOut;
 $('#profileButton').onclick = () => renderPage('profile'); $('#mobileProfile').onclick = () => renderPage('profile');
-api('/api/me').then(({ user }) => user ? showApp(user) : showWelcome()).catch(() => showWelcome()).finally(() => window.NervaLoader?.hide());
+const existingSession = sessionStorage.getItem(SESSION_KEY);
+const sessionBootstrap = existingSession ? api('/api/session/rotate', { method: 'POST' }).catch(() => { sessionStorage.removeItem(SESSION_KEY); }) : Promise.resolve();
+sessionBootstrap.then(() => api('/api/me')).then(({ user }) => user ? showApp(user) : showWelcome()).catch(() => showWelcome()).finally(() => window.NervaLoader?.hide());
 
