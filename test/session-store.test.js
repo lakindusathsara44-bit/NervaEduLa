@@ -21,7 +21,7 @@ test('a newly issued session is signed and resolves only for its owning user', a
 
 test('logout revokes the server-side session even when the token signature is valid', async () => {
   const account = user();
-  const token = sessions.createSession(account, SECRET, 3600, NOW);
+  const token = await sessions.createSession(account, SECRET, 3600, NOW);
   const parsed = sessions.parseSessionToken(token, SECRET, NOW);
   assert.equal(await sessions.revokeSession(account, parsed.sessionId), true);
   assert.equal(await sessions.findSession(token, [account], SECRET, NOW), null);
