@@ -37,8 +37,8 @@ The current repository does **not** yet demonstrate complete attendance, assignm
 - [x] Browser state-changing requests enforce the configured Origin boundary.
 - [x] Quiz submission checks the student's selected teacher/subject relationship.
 - [x] Login throttling no longer trusts arbitrary raw `X-Forwarded-For`.
-- [ ] Production must fail closed unless Firestore is explicitly selected.
-- [ ] Do not write a second local JSON copy of student/teacher data when Firestore is active.
+- [x] Production must fail closed unless Firestore is explicitly selected.
+- [x] Do not write a second local JSON copy of student/teacher data when Firestore is active.
 - [ ] Review and resolve npm audit advisories with compatible lockfile updates.
 - [ ] Add server-side session revocation/rotation strategy.
 - [ ] Add a shared rate limiter suitable for multiple Cloud Run instances.
@@ -165,4 +165,6 @@ All checks must be enforced on the server, not only by hiding frontend controls.
 
 ## Current implementation note
 
-This branch starts with Phase 0 only. It does not claim that later phases are implemented. Do not deploy until the production Firestore configuration, secret manager, CI, and operational requirements are verified.
+Phase 0 work in the current branch includes the production Firestore fail-closed guard and suppression of duplicate local JSON persistence when Firestore is active. GitHub Actions completed successfully with **8 tests passed, 0 failed**. The dependency audit still reports **7 moderate, 0 high and 0 critical** advisories; those are not fixed by this branch.
+
+This branch does not claim that later phases are implemented. Do not deploy until the production Firestore configuration, secret manager, CI, dependency advisories and operational requirements are verified.
