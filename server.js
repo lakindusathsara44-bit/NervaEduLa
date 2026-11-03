@@ -653,7 +653,7 @@ async function staticFile(req, res, pathname, url) {
     const resource = db.resources.find(item => item.url === assetURL);
     const isTeacherPhoto = db.users.some(user => user.role === 'teacher' && user.thumbnail === assetURL);
     if (!resource && !isTeacherPhoto) return json(res, 404, { error: 'File not found.' });
-    const authorizedViewer = viewer || (resource ? signedDownloadUser(req, url, resource) : null);
+    const authorizedViewer = viewer || (resource ? await signedDownloadUser(req, url, resource) : null);
     if (!authorizedViewer && !isTeacherPhoto) return json(res, 401, { error: 'Please sign in to view this file.' });
     if (resource && !mayReadResource(authorizedViewer, resource)) return json(res, 403, { error: 'This file is locked or is not assigned to your account.' });
     if (viewer?.role === 'teacher' && resource && resource.teacherId !== viewer.id) return json(res, 403, { error: 'You cannot view another teacher’s resource.' });
