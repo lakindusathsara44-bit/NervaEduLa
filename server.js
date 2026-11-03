@@ -61,8 +61,8 @@ if (process.env.NODE_ENV === 'production' && !persistence.enabled()) {
 }
 const SESSION_TTL = 7 * 24 * 60 * 60;
 async function issueSession(res, user) {
-  const token = sessions.createSession(user, SESSION_SECRET, SESSION_TTL);
-  await save();
+  const token = await sessions.createSession(user, SESSION_SECRET, SESSION_TTL);
+  if (!persistence.enabled()) await save();
   res.setHeader('set-cookie', `il_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}${SECURE_COOKIE}`);
   return token;
 }
@@ -74,8 +74,8 @@ function signedDownloadUrl(resource, user) {
   const route = resource.imageKitPrivate ? `/media/${resource.id}` : resource.url;
   return `${route}?user=${encodeURIComponent(user.id)}&exp=${exp}&sig=${sig}`;
 }
-function signedDownloadUser(req, url, resource) {
-  const viewer = sessionUser(req);
+async function signedDownloadUser(req, url, resource) {
+  const viewer = await sessionUser(req);
   if (viewer) return viewer;
   const userId = url.searchParams.get('user') || '', exp = url.searchParams.get('exp') || '', sig = url.searchParams.get('sig') || '';
   if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^\d{10}$/.test(exp) || !/^[A-Za-z0-9_-]{43}$/.test(sig)) return null;
@@ -218,12 +218,12 @@ function multipart(buffer, contentType) {
   }
   return { fields, files };
 }
-function sessionContext(req) {
+async function sessionContext(req) {
   const bearerToken = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
   const token = bearerToken || /(?:^|;\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
   return sessions.findSession(token, db.users, SESSION_SECRET);
 }
-function sessionUser(req) { return sessionContext(req)?.user || null; }
+async function sessionUser(req) { return (await sessionContext(req))?.user || null; }
 async function storeFile(file, allowed, max) {
   if (!allowed.includes(file.type)) throw fail(400, 'Unsupported file type: ' + file.name);
   if (!file.bytes.length || file.bytes.length > max) throw fail(413, 'File is empty or exceeds the allowed size: ' + file.name);
@@ -345,24 +345,24 @@ async function api(req, res, url) {
     return json(res, 200, { user: privateUser(user), sessionToken });
   }
   if (method === 'POST' && p === '/api/logout') {
-    const current = sessionContext(req);
-    if (current) { sessions.revokeSession(current.user, current.session.id); await save(); }
+    const current = await sessionContext(req);
+    if (current) { await sessions.revokeSession(current.user, current.session.id); if (!persistence.enabled()) await save(); }
     clearSession(res); return json(res, 200, { ok: true });
   }
   if (method === 'GET' && p === '/api/health') return json(res, 200, { ok: true, database: persistence.enabled() ? 'firestore' : 'local' });
-  if (method === 'GET' && p === '/api/me') { const u = sessionUser(req); return json(res, 200, { user: u ? privateUser(u) : null }); }
+  if (method === 'GET' && p === '/api/me') { const u = await sessionUser(req); return json(res, 200, { user: u ? privateUser(u) : null }); }
   if (method === 'POST' && p === '/api/session/rotate') {
     const current = sessionContext(req);
     if (!current) throw fail(401, 'Your session has expired. Please sign in again.');
-    const token = sessions.rotateSession(current.user, current.session.id, SESSION_SECRET, SESSION_TTL);
-    await save();
+    const token = await sessions.rotateSession(current.user, current.session.id, SESSION_SECRET, SESSION_TTL);
+    if (!persistence.enabled()) await save();
     res.setHeader('set-cookie', `il_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}${SECURE_COOKIE}`);
     return json(res, 200, { ok: true, sessionToken: token });
   }
   if (method === 'POST' && p === '/api/logout-all') {
     const current = sessionContext(req);
     if (!current) throw fail(401, 'Please sign in to continue.');
-    sessions.revokeAllSessions(current.user); await save(); clearSession(res);
+    await sessions.revokeAllSessions(current.user); if (!persistence.enabled()) await save(); clearSession(res);
     return json(res, 200, { ok: true });
   }
   if (method === 'GET' && p === '/api/teachers') {
@@ -374,7 +374,7 @@ async function api(req, res, url) {
     const custom = db.users.filter(isVerifiedTeacher).flatMap(u => subjectsFor(u));
     return json(res, 200, { subjects: [...new Set([...EXAM_SUBJECTS, ...custom])].sort((a, b) => a.localeCompare(b)) });
   }
-  const me = sessionUser(req);
+  const me = await sessionUser(req);
   if (p.startsWith('/api/') && !me) throw fail(401, 'Please sign in to continue.');
   if (method === 'POST' && p === '/api/imagekit-auth') {
     requireVerifiedTeacher(me);
@@ -633,13 +633,13 @@ async function api(req, res, url) {
   }
   throw fail(404, 'That page or action was not found.');
 }
-function staticFile(req, res, pathname, url) {
+async function staticFile(req, res, pathname, url) {
   let decoded; try { decoded = decodeURIComponent(pathname); } catch { return json(res, 400, { error: 'Invalid URL.' }); }
   const media = /^\/media\/([0-9a-f-]{36})$/i.exec(decoded);
   if (media) {
     const resource = db.resources.find(item => item.id === media[1] && item.type === 'video' && item.imageKitPrivate && item.imageKitFilePath);
     if (!resource) return json(res, 404, { error: 'Video not found.' });
-    const viewer = signedDownloadUser(req, url, resource);
+    const viewer = await signedDownloadUser(req, url, resource);
     if (!viewer) return json(res, 401, { error: 'Please sign in to view this video.' });
     if (!mayReadResource(viewer, resource)) return json(res, 403, { error: 'This video is locked or is not assigned to your account.' });
     try { res.writeHead(302, { location: signedImageKitUrl(resource.imageKitFilePath), 'cache-control': 'private, no-store' }); return res.end(); }
@@ -648,7 +648,7 @@ function staticFile(req, res, pathname, url) {
   if (decoded.startsWith('/uploads/')) {
     const name = decoded.slice('/uploads/'.length);
     if (!/^[0-9a-f-]{36}\.(?:jpg|png|webp|mp4|webm|mov|pdf)$/i.test(name)) return json(res, 404, { error: 'File not found.' });
-    const viewer = sessionUser(req);
+    const viewer = await sessionUser(req);
     const assetURL = '/uploads/' + name;
     const resource = db.resources.find(item => item.url === assetURL);
     const isTeacherPhoto = db.users.some(user => user.role === 'teacher' && user.thumbnail === assetURL);
@@ -741,7 +741,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (!isAllowedStateChangeOrigin(req, url)) return json(res, 403, { error: 'Request origin is not allowed.' });
     if (applyApiCors(req, res, url)) return;
-    if (url.pathname.startsWith('/api/')) await api(req, res, url); else staticFile(req, res, url.pathname, url);
+    if (url.pathname.startsWith('/api/')) await api(req, res, url); else await staticFile(req, res, url.pathname, url);
   } catch (err) { if (!res.headersSent) json(res, err.status || 400, { error: err.status ? err.message : 'Something went wrong. Check your details and try again.' }); else res.destroy(); }
 });
 async function ensureAccountManager() {
