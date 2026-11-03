@@ -42,7 +42,8 @@ The current repository does **not** yet demonstrate complete attendance, assignm
 - [ ] Review and resolve npm audit advisories with compatible lockfile updates.
 - [ ] Add server-side session revocation/rotation strategy.
 - [ ] Add a shared rate limiter suitable for multiple Cloud Run instances.
-- [ ] Replace Firestore whole-collection snapshot rewrites with safe per-record operations and concurrency controls.
+- [x] Replace non-atomic Firestore batch rewrites with one atomic transaction guarded by a shared database revision; stale instances fail closed with HTTP 503 rather than overwriting newer data.
+- [ ] Replace the interim atomic full-snapshot transaction with per-record mutation operations before the dataset approaches the 450-write safety ceiling.
 - [ ] Add CSP in report-only mode, then enforce after frontend compatibility review.
 - [ ] Add secret scanning, dependency review, and immutable third-party action pinning.
 - [ ] Establish Firestore backup retention and perform a documented restore drill.
@@ -165,6 +166,8 @@ All checks must be enforced on the server, not only by hiding frontend controls.
 
 ## Current implementation note
 
-Phase 0 work in the current branch includes the production Firestore fail-closed guard and suppression of duplicate local JSON persistence when Firestore is active. GitHub Actions completed successfully with **8 tests passed, 0 failed**. The dependency audit still reports **7 moderate, 0 high and 0 critical** advisories; those are not fixed by this branch.
+Phase 0 work in the current branch includes the production Firestore fail-closed guard, suppression of duplicate local JSON persistence, and atomic revision-guarded Firestore snapshot commits. A stale service instance receives HTTP 503 and cannot overwrite a newer committed snapshot. The transaction is deliberately capped at 450 writes (including the revision document); larger datasets must move to per-record writes before reaching that ceiling. GitHub Actions must pass on the latest commit before this work is considered validated. The dependency audit previously reported **7 moderate, 0 high and 0 critical** advisories; those are not fixed by this change.
+
+Deployment note: during rollout, drain all old application instances before enabling the revision-guarded writer; older application versions do not participate in the revision protocol. If an instance returns the stale-revision 503, restart/refresh that instance before retrying the failed action. Do not automatically replay a failed write from stale in-memory state. This guard prevents silent lost updates but is not a substitute for per-record persistence or a multi-instance load test.
 
 This branch does not claim that later phases are implemented. Do not deploy until the production Firestore configuration, secret manager, CI, dependency advisories and operational requirements are verified.
