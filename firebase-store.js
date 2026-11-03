@@ -208,6 +208,7 @@ async function createSessionRecord(session) {
   await db.runTransaction(async transaction => {
     const guard = await readSessionGuard(transaction, db, session.userId);
     const existing = await transaction.get(query);
+    if (existing.size > MAX_TRANSACTION_WRITES - 2) throw new Error('Session cleanup exceeds the safe Firestore transaction write limit; investigate stale session records.');
     const now = Math.floor(Date.now() / 1000);
     const active = existing.docs
       .map(doc => ({ ref: doc.ref, data: doc.data() }))
@@ -265,6 +266,7 @@ async function rotateSessionRecord(oldSessionId, userId, newSession) {
     const guard = await readSessionGuard(transaction, db, userId);
     const oldSnapshot = await transaction.get(oldRef);
     const existing = await transaction.get(query);
+    if (existing.size > MAX_TRANSACTION_WRITES - 2) throw new Error('Session rotation exceeds the safe Firestore transaction write limit; investigate stale session records.');
     if (!oldSnapshot.exists || oldSnapshot.data().userId !== userId) {
       const error = new Error('The current session is no longer active. Please sign in again.');
       error.code = 'NERVAEDU_SESSION_REVOKED';
