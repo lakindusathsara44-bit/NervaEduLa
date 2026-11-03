@@ -219,8 +219,8 @@ function multipart(buffer, contentType) {
   return { fields, files };
 }
 function sessionContext(req) {
-  const bearerToken = /^Bearer\\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
-  const token = bearerToken || /(?:^|;\\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+  const bearerToken = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
+  const token = bearerToken || /(?:^|;\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
   return sessions.findSession(token, db.users, SESSION_SECRET);
 }
 function sessionUser(req) { return sessionContext(req)?.user || null; }
