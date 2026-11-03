@@ -58,28 +58,27 @@ async function ensureStateDocument(db) {
   });
 }
 
-async function readCollection(db, name) {
-  const snapshot = await db.collection(name).get();
-  return snapshot.docs.map(doc => doc.data());
-}
-
 async function loadDatabase(localDatabase) {
   if (!enabled()) return localDatabase;
   const db = getFirestore();
   await ensureStateDocument(db);
-  const stateSnapshot = await stateReference(db).get();
-  loadedRevision = revisionFrom(stateSnapshot);
 
-  const [users, resources, quizzes, choices, accessRequests, videoUnlocks, videoPacks, teacherPlanRequests] = await Promise.all([
-    readCollection(db, COLLECTIONS.users),
-    readCollection(db, COLLECTIONS.resources),
-    readCollection(db, COLLECTIONS.quizzes),
-    readCollection(db, COLLECTIONS.choices),
-    readCollection(db, COLLECTIONS.accessRequests),
-    readCollection(db, COLLECTIONS.videoUnlocks),
-    readCollection(db, COLLECTIONS.videoPacks),
-    readCollection(db, COLLECTIONS.teacherPlanRequests),
-  ]);
+  // Read the revision and every collection from one consistent Firestore transaction.
+  // A non-transactional read could mix old and new collections during another writer's commit.
+  const snapshot = await db.runTransaction(async transaction => {
+    const stateSnapshot = await transaction.get(stateReference(db));
+    const collectionSnapshots = await Promise.all(Object.entries(COLLECTIONS).map(async ([key, name]) => ({
+      key,
+      rows: (await transaction.get(db.collection(name))).docs.map(doc => doc.data()),
+    })));
+    return {
+      revision: revisionFrom(stateSnapshot),
+      collections: Object.fromEntries(collectionSnapshots.map(item => [item.key, item.rows])),
+    };
+  });
+  loadedRevision = snapshot.revision;
+
+  const { users, resources, quizzes, choices, accessRequests, videoUnlocks, videoPacks, teacherPlanRequests } = snapshot.collections;
   const remoteDatabase = {
     users,
     resources,
