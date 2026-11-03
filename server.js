@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { EXAM_SUBJECTS, OL_NAMES, AL_NAMES, OL_SUBJECTS, AL_SUBJECTS, SCHOLARSHIP_NAMES, SCHOLARSHIP_SUBJECTS } = require('./subjects');
 const persistence = require('./firebase-store');
+const sessions = require('./session-store');
 
 function loadDotEnv() {
   const envFile = path.join(__dirname, '.env');
@@ -59,22 +60,9 @@ if (process.env.NODE_ENV === 'production' && !persistence.enabled()) {
   throw new Error('Production requires NERVAEDU_DATABASE=firestore. Local JSON storage is not supported in production.');
 }
 const SESSION_TTL = 7 * 24 * 60 * 60;
-function sessionCookieValue(userId) {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
-  const payload = `${userId}.${exp}`;
-  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-  return `${payload}.${sig}`;
-}
-function verifySessionToken(token) {
-  const match = /^([0-9a-f-]{36})\.(\d+)\.([A-Za-z0-9_-]+)$/.exec(String(token || ''));
-  if (!match || Number(match[2]) < Math.floor(Date.now() / 1000)) return null;
-  const payload = `${match[1]}.${match[2]}`;
-  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-  if (match[3].length !== expected.length || !crypto.timingSafeEqual(Buffer.from(match[3]), Buffer.from(expected))) return null;
-  return match[1];
-}
-function issueSession(res, userId) {
-  const token = sessionCookieValue(userId);
+async function issueSession(res, user) {
+  const token = sessions.createSession(user, SESSION_SECRET, SESSION_TTL);
+  await save();
   res.setHeader('set-cookie', `il_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}${SECURE_COOKIE}`);
   return token;
 }
@@ -230,12 +218,12 @@ function multipart(buffer, contentType) {
   }
   return { fields, files };
 }
-function sessionUser(req) {
-  const bearerToken = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
-  const token = bearerToken || /(?:^|;\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
-  const id = verifySessionToken(token);
-  return id && db.users.find(u => u.id === id);
+function sessionContext(req) {
+  const bearerToken = /^Bearer\\s+(.+)$/i.exec(req.headers.authorization || '')?.[1];
+  const token = bearerToken || /(?:^|;\\s*)il_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+  return sessions.findSession(token, db.users, SESSION_SECRET);
 }
+function sessionUser(req) { return sessionContext(req)?.user || null; }
 async function storeFile(file, allowed, max) {
   if (!allowed.includes(file.type)) throw fail(400, 'Unsupported file type: ' + file.name);
   if (!file.bytes.length || file.bytes.length > max) throw fail(413, 'File is empty or exceeds the allowed size: ' + file.name);
@@ -342,7 +330,7 @@ async function api(req, res, url) {
     const passwordHash = crypto.scryptSync(password, salt, 64).toString('hex');
     db.users.push({ ...user, salt, passwordHash });
     await save();
-    const sessionToken = issueSession(res, user.id);
+    const sessionToken = await issueSession(res, db.users.find(item => item.id === user.id));
     return json(res, 201, { user: privateUser(user), sessionToken });
   }
   if (method === 'POST' && p === '/api/login') {
@@ -353,14 +341,30 @@ async function api(req, res, url) {
     const candidate = user && crypto.scryptSync(String(password || ''), user.salt, 64).toString('hex');
     if (!user || !crypto.timingSafeEqual(Buffer.from(candidate, 'hex'), Buffer.from(user.passwordHash, 'hex'))) { recordLoginFailure(req); throw fail(401, 'Phone number or password is incorrect.'); }
     clearLoginFailures(req);
-    const sessionToken = issueSession(res, user.id);
+    const sessionToken = await issueSession(res, user);
     return json(res, 200, { user: privateUser(user), sessionToken });
   }
   if (method === 'POST' && p === '/api/logout') {
+    const current = sessionContext(req);
+    if (current) { sessions.revokeSession(current.user, current.session.id); await save(); }
     clearSession(res); return json(res, 200, { ok: true });
   }
   if (method === 'GET' && p === '/api/health') return json(res, 200, { ok: true, database: persistence.enabled() ? 'firestore' : 'local' });
   if (method === 'GET' && p === '/api/me') { const u = sessionUser(req); return json(res, 200, { user: u ? privateUser(u) : null }); }
+  if (method === 'POST' && p === '/api/session/rotate') {
+    const current = sessionContext(req);
+    if (!current) throw fail(401, 'Your session has expired. Please sign in again.');
+    const token = sessions.rotateSession(current.user, current.session.id, SESSION_SECRET, SESSION_TTL);
+    await save();
+    res.setHeader('set-cookie', `il_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}${SECURE_COOKIE}`);
+    return json(res, 200, { ok: true, sessionToken: token });
+  }
+  if (method === 'POST' && p === '/api/logout-all') {
+    const current = sessionContext(req);
+    if (!current) throw fail(401, 'Please sign in to continue.');
+    sessions.revokeAllSessions(current.user); await save(); clearSession(res);
+    return json(res, 200, { ok: true });
+  }
   if (method === 'GET' && p === '/api/teachers') {
     const subject = clean(url.searchParams.get('subject'), 100);
     const teachers = db.users.filter(u => isVerifiedTeacher(u) && (!subject || subjectsFor(u).includes(subject))).map(publicUser);
