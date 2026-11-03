@@ -148,7 +148,7 @@ test('snapshots exceeding the safe Firestore transaction write limit fail closed
   );
 
   assert.equal(revisionOf(db), 0);
-  assert.equal(db.collections.get('resources'), undefined);
+  assert.equal(db.collections.get('resources').size, 0);
 });
 
 test('records without document IDs are rejected before any Firestore writes', async () => {
