@@ -41,6 +41,9 @@ function save() {
   const snapshot = JSON.stringify(db, null, 2);
   writeQueue = writeQueue.catch(() => {}).then(async () => {
     await persistence.saveDatabase(db);
+    // Firestore is the production source of truth. Avoid writing a duplicate local
+    // JSON copy of student/teacher records to ephemeral container storage.
+    if (persistence.enabled()) return;
     await fs.promises.writeFile(DB_FILE + '.tmp', snapshot);
     await fs.promises.rename(DB_FILE + '.tmp', DB_FILE);
   });
@@ -51,6 +54,9 @@ const authFailures = new Map();
 const SESSION_SECRET = process.env.NERVAEDU_SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-only-session-secret');
 if (process.env.NODE_ENV === 'production' && SESSION_SECRET.length < 32) {
   throw new Error('Production requires NERVAEDU_SESSION_SECRET with at least 32 characters. Configure it in the deployment secret manager.');
+}
+if (process.env.NODE_ENV === 'production' && !persistence.enabled()) {
+  throw new Error('Production requires NERVAEDU_DATABASE=firestore. Local JSON storage is not supported in production.');
 }
 const SESSION_TTL = 7 * 24 * 60 * 60;
 function sessionCookieValue(userId) {
