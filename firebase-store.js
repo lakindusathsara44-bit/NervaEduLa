@@ -181,7 +181,20 @@ async function commitDatabase(db, database, expectedRevision) {
 // Sessions live in their own Firestore collection so every application instance
 // validates revocation against shared, authoritative state.
 const SESSION_COLLECTION = 'sessions';
+const SESSION_GUARD_COLLECTION = '_nervaedu_session_guards';
 const MAX_ACTIVE_SESSIONS = 5;
+
+async function readSessionGuard(transaction, db, userId) {
+  const ref = db.collection(SESSION_GUARD_COLLECTION).doc(userId);
+  const snapshot = await transaction.get(ref);
+  const revision = snapshot.exists ? snapshot.data()?.revision : 0;
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Session guard metadata is invalid; stop session writes and investigate.');
+  return { ref, revision };
+}
+
+function writeSessionGuard(transaction, guard) {
+  transaction.set(guard.ref, { revision: guard.revision + 1, updatedAt: new Date().toISOString() });
+}
 
 function sessionDocument(db, sessionId) {
   return db.collection(SESSION_COLLECTION).doc(sessionId);
@@ -193,6 +206,7 @@ async function createSessionRecord(session) {
   const query = collection.where('userId', '==', session.userId);
   const ref = sessionDocument(db, session.id);
   await db.runTransaction(async transaction => {
+    const guard = await readSessionGuard(transaction, db, session.userId);
     const existing = await transaction.get(query);
     const now = Math.floor(Date.now() / 1000);
     const active = existing.docs
@@ -204,6 +218,7 @@ async function createSessionRecord(session) {
     }
     while (active.length >= MAX_ACTIVE_SESSIONS) transaction.delete(active.shift().ref);
     transaction.create(ref, session);
+    writeSessionGuard(transaction, guard);
   });
 }
 
@@ -216,9 +231,11 @@ async function revokeSessionRecord(sessionId, userId) {
   const db = getFirestore();
   const ref = sessionDocument(db, sessionId);
   return db.runTransaction(async transaction => {
+    const guard = await readSessionGuard(transaction, db, userId);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || snapshot.data().userId !== userId) return false;
     transaction.delete(ref);
+    writeSessionGuard(transaction, guard);
     return true;
   });
 }
@@ -227,11 +244,13 @@ async function revokeAllSessionRecords(userId) {
   const db = getFirestore();
   const query = db.collection(SESSION_COLLECTION).where('userId', '==', userId);
   return db.runTransaction(async transaction => {
+    const guard = await readSessionGuard(transaction, db, userId);
     const snapshot = await transaction.get(query);
     if (snapshot.size > MAX_TRANSACTION_WRITES - 1) {
       throw new Error('Too many active sessions to revoke safely; investigate session-store integrity.');
     }
     for (const doc of snapshot.docs) transaction.delete(doc.ref);
+    if (snapshot.size) writeSessionGuard(transaction, guard);
     return snapshot.size;
   });
 }
@@ -243,6 +262,7 @@ async function rotateSessionRecord(oldSessionId, userId, newSession) {
   const newRef = sessionDocument(db, newSession.id);
   const query = collection.where('userId', '==', userId);
   await db.runTransaction(async transaction => {
+    const guard = await readSessionGuard(transaction, db, userId);
     const oldSnapshot = await transaction.get(oldRef);
     const existing = await transaction.get(query);
     if (!oldSnapshot.exists || oldSnapshot.data().userId !== userId) {
@@ -263,6 +283,7 @@ async function rotateSessionRecord(oldSessionId, userId, newSession) {
     }
     while (active.length >= MAX_ACTIVE_SESSIONS) transaction.delete(active.shift().ref);
     transaction.create(newRef, newSession);
+    writeSessionGuard(transaction, guard);
   });
 }
 
