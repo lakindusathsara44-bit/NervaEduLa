@@ -184,6 +184,27 @@ test('GitHub Pages can register a teacher and use the Cloud Run bearer session',
   assert.equal(publicFile.status, 401, 'learning files must require a session or short-lived signed URL');
 });
 
+test('production refuses to start with local JSON storage even when the session secret is valid', t => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-production-storage-'));
+  for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
+    fs.copyFileSync(path.join(projectRoot, file), path.join(workDir, file));
+  }
+  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
+  const result = spawnSync(process.execPath, ['server.js'], {
+    cwd: workDir,
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      NERVAEDU_SESSION_SECRET: 'test-session-secret-that-is-long-enough-32-chars',
+      NERVAEDU_DATABASE: 'local',
+      PORT: '0',
+    },
+    encoding: 'utf8',
+  });
+  assert.notEqual(result.status, 0, 'production must not silently start with local JSON persistence');
+  assert.match(result.stderr, /Production requires NERVAEDU_DATABASE=firestore/);
+});
+
 test('production refuses to start without a dedicated strong session secret', t => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-production-secret-'));
   for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
