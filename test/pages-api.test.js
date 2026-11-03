@@ -21,7 +21,7 @@ async function unusedPort() {
 
 test('GitHub Pages can register a teacher and use the Cloud Run bearer session', async t => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-pages-api-'));
-  for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
+  for (const file of ['server.js', 'firebase-store.js', 'session-store.js', 'subjects.js']) {
     fs.copyFileSync(path.join(projectRoot, file), path.join(workDir, file));
   }
   const port = await unusedPort();
@@ -186,7 +186,7 @@ test('GitHub Pages can register a teacher and use the Cloud Run bearer session',
 
 test('production refuses to start with local JSON storage even when the session secret is valid', t => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-production-storage-'));
-  for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
+  for (const file of ['server.js', 'firebase-store.js', 'session-store.js', 'subjects.js']) {
     fs.copyFileSync(path.join(projectRoot, file), path.join(workDir, file));
   }
   t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
@@ -207,7 +207,7 @@ test('production refuses to start with local JSON storage even when the session 
 
 test('production refuses to start without a dedicated strong session secret', t => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-production-secret-'));
-  for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
+  for (const file of ['server.js', 'firebase-store.js', 'session-store.js', 'subjects.js']) {
     fs.copyFileSync(path.join(projectRoot, file), path.join(workDir, file));
   }
   t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
