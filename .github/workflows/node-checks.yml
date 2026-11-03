@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - bugfix/**
+      - security/**
   workflow_dispatch:
 
 permissions:
