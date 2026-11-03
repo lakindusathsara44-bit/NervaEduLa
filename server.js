@@ -48,7 +48,10 @@ function save() {
 }
 const videoReservations = new Map();
 const authFailures = new Map();
-const SESSION_SECRET = process.env.NERVAEDU_SESSION_SECRET || process.env.NERVAEDU_ADMIN_PASSWORD || 'change-this-session-secret-in-production';
+const SESSION_SECRET = process.env.NERVAEDU_SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-only-session-secret');
+if (process.env.NODE_ENV === 'production' && SESSION_SECRET.length < 32) {
+  throw new Error('Production requires NERVAEDU_SESSION_SECRET with at least 32 characters. Configure it in the deployment secret manager.');
+}
 const SESSION_TTL = 7 * 24 * 60 * 60;
 function sessionCookieValue(userId) {
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
@@ -98,7 +101,10 @@ function mayReadResource(user, resource) {
 function clearSession(res) {
   res.setHeader('set-cookie', `il_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${SECURE_COOKIE}`);
 }
-function authFailureKey(req) { return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim(); }
+// X-Forwarded-For is client-controlled unless a trusted proxy chain is configured.
+// Use the transport peer as the conservative default; configure a trusted proxy-aware
+// distributed limiter before relying on per-client limits behind a shared proxy.
+function authFailureKey(req) { return String(req.socket.remoteAddress || 'unknown'); }
 function checkLoginRateLimit(req) {
   const now = Date.now(), key = authFailureKey(req), item = authFailures.get(key);
   if (item && item.blockedUntil > now) throw fail(429, 'Too many sign-in attempts. Please wait a few minutes and try again.');
@@ -609,6 +615,7 @@ async function api(req, res, url) {
   if (method === 'POST' && submit) {
     if (me.role !== 'student') throw fail(403, 'Only student accounts can submit quiz answers.');
     const quiz = db.quizzes.find(q => q.id === submit[1]); if (!quiz) throw fail(404, 'Quiz not found.');
+    if (studentSelectedTeacherId(me.id, quiz.subject) !== quiz.teacherId) throw fail(403, 'Choose this quiz teacher for the subject before submitting answers.');
     const { answers } = JSON.parse((await readBody(req, MAX_FORM)).toString('utf8'));
     if (!Array.isArray(answers) || answers.length !== 6) throw fail(400, 'Answer all six questions.');
     const score = quiz.questions.reduce((sum, q, i) => sum + (Number(answers[i]) === q.answer ? 1 : 0), 0);
@@ -685,6 +692,18 @@ function staticFile(req, res, pathname, url) {
   if (req.method === 'HEAD') return res.end();
   return fs.createReadStream(target).pipe(res);
 }
+function isAllowedStateChangeOrigin(req, url) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || !req.headers.origin) return true;
+  let origin;
+  try { origin = new URL(req.headers.origin); } catch { return false; }
+  if (origin.origin === 'null' || !['http:', 'https:'].includes(origin.protocol)) return false;
+  if (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:') return false;
+  const requestHost = String(req.headers.host || '').toLowerCase();
+  const sameOrigin = origin.host.toLowerCase() === requestHost;
+  // GitHub Pages is intentionally cross-origin from Cloud Run. Permit it only when
+  // the exact HTTPS origin is present in the explicit CORS allowlist.
+  return sameOrigin || CORS_ORIGINS.has(origin.origin);
+}
 function applyApiCors(req, res, url) {
   if (!url.pathname.startsWith('/api/')) return false;
   const origin = req.headers.origin;
@@ -710,6 +729,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (isPrivateHttpPath(req.url)) return json(res, 404, { error: 'Not found.' });
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (!isAllowedStateChangeOrigin(req, url)) return json(res, 403, { error: 'Request origin is not allowed.' });
     if (applyApiCors(req, res, url)) return;
     if (url.pathname.startsWith('/api/')) await api(req, res, url); else staticFile(req, res, url.pathname, url);
   } catch (err) { if (!res.headersSent) json(res, err.status || 400, { error: err.status ? err.message : 'Something went wrong. Check your details and try again.' }); else res.destroy(); }

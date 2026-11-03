@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
@@ -74,6 +74,12 @@ test('GitHub Pages can register a teacher and use the Cloud Run bearer session',
   assert.equal(preflight.headers.get('access-control-allow-origin'), pagesOrigin);
   assert.match(preflight.headers.get('access-control-allow-headers') || '', /authorization/i);
 
+  const blockedOrigin = await fetch(`${baseUrl}/api/register`, {
+    method: 'POST', headers: { Origin: 'https://attacker.example', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'student' }),
+  });
+  assert.equal(blockedOrigin.status, 403, 'untrusted browser origins must not reach state-changing API routes');
+
   const form = new FormData();
   form.set('role', 'teacher');
   form.set('name', 'Test Teacher');
@@ -139,6 +145,33 @@ test('GitHub Pages can register a teacher and use the Cloud Run bearer session',
     body: JSON.stringify({ subject: 'O/L — Mathematics', teacherId: registered.user.id }),
   });
   assert.equal(chooseTeacher.status, 200, await chooseTeacher.clone().text());
+
+  const quizQuestions = Array.from({ length: 6 }, (_, index) => ({
+    prompt: `Question ${index + 1}`, options: ['A', 'B', 'C', 'D'], answer: 0,
+  }));
+  const createdQuizResponse = await fetch(`${baseUrl}/api/quizzes`, {
+    method: 'POST', headers: { Authorization: `Bearer ${registered.sessionToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject: 'O/L — Mathematics', title: 'Access test quiz', questions: quizQuestions }),
+  });
+  const createdQuiz = await createdQuizResponse.json();
+  assert.equal(createdQuizResponse.status, 201, JSON.stringify(createdQuiz));
+  const allowedQuizSubmission = await fetch(`${baseUrl}/api/quizzes/${createdQuiz.quiz.id}/submit`, {
+    method: 'POST', headers: { Authorization: `Bearer ${student.sessionToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers: [0, 0, 0, 0, 0, 0] }),
+  });
+  assert.equal(allowedQuizSubmission.status, 200, await allowedQuizSubmission.clone().text());
+  const unassignedRegistration = await fetch(`${baseUrl}/api/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'student', name: 'Unassigned Student', phone: '0776123458', password: 'student-test-password', age: 16, address: 'Colombo', school: 'Test School' }),
+  });
+  const unassignedStudent = await unassignedRegistration.json();
+  assert.equal(unassignedRegistration.status, 201, JSON.stringify(unassignedStudent));
+  const blockedQuizSubmission = await fetch(`${baseUrl}/api/quizzes/${createdQuiz.quiz.id}/submit`, {
+    method: 'POST', headers: { Authorization: `Bearer ${unassignedStudent.sessionToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers: [0, 0, 0, 0, 0, 0] }),
+  });
+  assert.equal(blockedQuizSubmission.status, 403, 'students must not submit quizzes belonging to an unselected teacher');
+
   const studentResources = await fetch(`${baseUrl}/api/resources`, { headers: { Authorization: `Bearer ${student.sessionToken}` } });
   const { resources } = await studentResources.json();
   assert.equal(studentResources.status, 200);
@@ -151,3 +184,24 @@ test('GitHub Pages can register a teacher and use the Cloud Run bearer session',
   assert.equal(publicFile.status, 401, 'learning files must require a session or short-lived signed URL');
 });
 
+test('production refuses to start without a dedicated strong session secret', t => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nervaedu-production-secret-'));
+  for (const file of ['server.js', 'firebase-store.js', 'subjects.js']) {
+    fs.copyFileSync(path.join(projectRoot, file), path.join(workDir, file));
+  }
+  t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
+  const result = spawnSync(process.execPath, ['server.js'], {
+    cwd: workDir,
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      NERVAEDU_SESSION_SECRET: '',
+      NERVAEDU_ADMIN_PHONE: '0776000000',
+      NERVAEDU_ADMIN_PASSWORD: 'test-manager-password',
+      PORT: '0',
+    },
+    encoding: 'utf8',
+  });
+  assert.notEqual(result.status, 0, 'production must fail closed without a session secret');
+  assert.match(result.stderr, /Production requires NERVAEDU_SESSION_SECRET/);
+});
